@@ -27,6 +27,24 @@ CONFIG = {
     "secret": os.environ.get("SECRET_KEY", secrets.token_urlsafe(32)),
 }
 
+DB_FILE = "meyren.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS links (uuid TEXT PRIMARY KEY, label TEXT, limit_bytes INTEGER, used_bytes INTEGER, active INTEGER, created_at TEXT)''')
+    
+    c.execute("SELECT value FROM settings WHERE key='password_hash'")
+    if not c.fetchone():
+        default_hash = hashlib.sha256(f"{os.environ.get('ADMIN_PASSWORD', 'admin')}{CONFIG['secret']}".encode()).hexdigest()
+        c.execute("INSERT INTO settings (key, value) VALUES ('password_hash', ?)", (default_hash,))
+        
+    conn.commit()
+    conn.close()
+
+init_db()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
