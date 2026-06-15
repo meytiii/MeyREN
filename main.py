@@ -6,6 +6,7 @@ import secrets
 import time
 from datetime import datetime
 import db
+import utils
 from urllib.parse import quote
 from collections import deque, defaultdict
 
@@ -89,7 +90,7 @@ async def keep_alive():
     while True:
         await asyncio.sleep(600)
         try:
-            domain = get_domain()
+            domain = utils.get_domain()
             if domain and domain != "localhost":
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     await client.get(f"https://{domain}/health")
@@ -111,47 +112,10 @@ async def shutdown():
     if http_client:
         await http_client.aclose()
 
-def get_domain() -> str:
-    return os.environ.get("RENDER_EXTERNAL_URL", os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost")).replace("https://", "").replace("http://", "")
-
-def generate_uuid(seed: str | None = None) -> str:
-    if seed is None:
-        return str(secrets.token_hex(16))[:8] + "-" + secrets.token_hex(2) + "-" + secrets.token_hex(2) + "-" + secrets.token_hex(2) + "-" + secrets.token_hex(6)
-    h = hashlib.sha256(f"{seed}{CONFIG['secret']}".encode()).hexdigest()
-    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
-
-def generate_vless_link(uuid: str, remark: str = "REN") -> str:
-    domain = get_domain()
-    path = f"/ws/{uuid}"
-    params = {
-        "encryption": "none",
-        "security": "tls",
-        "type": "ws",
-        "host": domain,
-        "path": path,
-        "sni": domain,
-        "fp": "chrome",
-        "alpn": "http/1.1",
-    }
-    query = "&".join(f"{k}={quote(str(v))}" for k, v in params.items())
-    return f"vless://{uuid}@{domain}:443?{query}#{quote(remark)}"
-
-def uptime() -> str:
-    secs = int(time.time() - stats["start_time"])
-    h, m, s = secs // 3600, (secs % 3600) // 60, secs % 60
-    return f"{h:02d}:{m:02d}:{s:02d}"
-
-def parse_size_to_bytes(value: float, unit: str) -> int:
-    unit = unit.upper()
-    if unit == "GB": return int(value * 1024 * 1024 * 1024)
-    if unit == "MB": return int(value * 1024 * 1024)
-    if unit == "KB": return int(value * 1024)
-    return int(value)
-
 async def ensure_default_link():
     async with LINKS_LOCK:
         if not LINKS:
-            uid = generate_uuid("default")
+            uid = utils.generate_uuid(CONFIG["secret"], "default")
             LINKS[uid] = {"label": "Default", "limit_bytes": 0, "used_bytes": 0, "created_at": datetime.now().isoformat(), "active": True}
 
 async def close_connections_for_link(uid: str):
@@ -168,11 +132,11 @@ async def close_connections_for_link(uid: str):
 
 @app.get("/")
 async def root():
-    return {"service": "REN", "version": "1.0", "status": "active", "domain": get_domain()}
+    return {"service": "MeyREN", "version": "1.0", "status": "active", "domain": utils.get_domain()}
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "connections": len(connections), "uptime": uptime()}
+    return {"status": "ok", "connections": len(connections), "uptime": utils.uptime(stats["start_time"])}
 
 @app.post("/api/login")
 async def api_login(request: Request):
@@ -223,11 +187,11 @@ async def get_stats(_=Depends(require_auth)):
         "total_traffic_mb": round(stats["total_bytes"] / (1024 * 1024), 2),
         "total_requests": stats["total_requests"],
         "total_errors": stats["total_errors"],
-        "uptime": uptime(),
+        "uptime": utils.uptime(stats["start_time"]),
         "timestamp": datetime.now().isoformat(),
         "recent_errors": list(error_logs)[-10:],
         "links_count": len(LINKS),
-        "domain": get_domain(),
+        "domain": utils.get_domain(),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "memory_percent": psutil.virtual_memory().percent,
         "hourly_traffic": dict(hourly_traffic),
@@ -239,18 +203,18 @@ async def create_link(request: Request, _=Depends(require_auth)):
     label = (body.get("label") or "New Link").strip()[:60]
     limit_value = float(body.get("limit_value") or 0)
     limit_unit = body.get("limit_unit") or "GB"
-    limit_bytes = 0 if limit_value <= 0 else parse_size_to_bytes(limit_value, limit_unit)
-    uid = generate_uuid(label)
+    limit_bytes = 0 if limit_value <= 0 else utils.parse_size_to_bytes(limit_value, limit_unit)
+    uid = utils.generate_uuid(CONFIG["secret"], label)
     async with LINKS_LOCK:
         LINKS[uid] = {"label": label, "limit_bytes": limit_bytes, "used_bytes": 0, "created_at": datetime.now().isoformat(), "active": True}
-    return {"uuid": uid, "label": label, "limit_bytes": limit_bytes, "used_bytes": 0, "active": True, "created_at": LINKS[uid]["created_at"], "vless_link": generate_vless_link(uid, remark=f"REN-{label}")}
+    return {"uuid": uid, "label": label, "limit_bytes": limit_bytes, "used_bytes": 0, "active": True, "created_at": LINKS[uid]["created_at"], "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{label}")}
 
 @app.get("/api/links")
 async def list_links(_=Depends(require_auth)):
     result = []
     async with LINKS_LOCK:
         for uid, data in LINKS.items():
-            result.append({"uuid": uid, "label": data["label"], "limit_bytes": data["limit_bytes"], "used_bytes": data["used_bytes"], "active": data["active"], "created_at": data["created_at"], "vless_link": generate_vless_link(uid, remark=f"REN-{data['label']}")})
+            result.append({"uuid": uid, "label": data["label"], "limit_bytes": data["limit_bytes"], "used_bytes": data["used_bytes"], "active": data["active"], "created_at": data["created_at"], "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{data['label']}")})
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {"links": result}
 
@@ -265,7 +229,7 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
         if "limit_value" in body:
             limit_value = float(body.get("limit_value") or 0)
             limit_unit = body.get("limit_unit") or "GB"
-            LINKS[uid]["limit_bytes"] = 0 if limit_value <= 0 else parse_size_to_bytes(limit_value, limit_unit)
+            LINKS[uid]["limit_bytes"] = 0 if limit_value <= 0 else utils.parse_size_to_bytes(limit_value, limit_unit)
         if "reset_usage" in body and body["reset_usage"]:
             LINKS[uid]["used_bytes"] = 0
         if "label" in body:
@@ -280,28 +244,6 @@ async def delete_link(uid: str, _=Depends(require_auth)):
     return {"ok": True}
 
 RELAY_BUF = 64 * 1024
-
-async def parse_vless_header(first_chunk: bytes):
-    if len(first_chunk) < 24:
-        raise ValueError("chunk too small")
-    pos = 0
-    pos += 1; pos += 16
-    addon_len = first_chunk[pos]; pos += 1; pos += addon_len
-    command = first_chunk[pos]; pos += 1
-    port = int.from_bytes(first_chunk[pos:pos + 2], "big"); pos += 2
-    addr_type = first_chunk[pos]; pos += 1
-    if addr_type == 1:
-        addr_bytes = first_chunk[pos:pos + 4]; pos += 4
-        address = ".".join(str(b) for b in addr_bytes)
-    elif addr_type == 2:
-        domain_len = first_chunk[pos]; pos += 1
-        address = first_chunk[pos:pos + domain_len].decode("utf-8", errors="ignore"); pos += domain_len
-    elif addr_type == 3:
-        addr_bytes = first_chunk[pos:pos + 16]; pos += 16
-        address = ":".join(f"{addr_bytes[i]:02x}{addr_bytes[i+1]:02x}" for i in range(0, 16, 2))
-    else:
-        raise ValueError(f"unknown address type: {addr_type}")
-    return command, address, port, first_chunk[pos:]
 
 async def check_quota(uid: str, extra_bytes: int) -> bool:
     async with LINKS_LOCK:
@@ -368,7 +310,7 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
         if first_msg["type"] == "websocket.disconnect": return
         first_chunk = first_msg.get("bytes") or (first_msg.get("text") or "").encode()
         if not first_chunk: return
-        command, address, port, initial_payload = await parse_vless_header(first_chunk)
+        command, address, port, initial_payload = await utils.parse_vless_header(first_chunk)
         size = len(first_chunk)
         stats["total_bytes"] += size; stats["total_requests"] += 1
         connections[conn_id]["bytes"] += size
