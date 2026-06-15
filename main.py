@@ -7,9 +7,9 @@ import time
 from datetime import datetime
 import db
 import utils
+import auth
 from urllib.parse import quote
 from collections import deque, defaultdict
-
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -51,40 +51,8 @@ http_client: httpx.AsyncClient | None = None
 LINKS: dict = {}
 LINKS_LOCK = asyncio.Lock()
 
-SESSION_COOKIE = "ren_session"
-SESSION_TTL = 60 * 60 * 24 * 7
-
 def hash_password(pw: str) -> str:
     return hashlib.sha256(f"{pw}{CONFIG['secret']}".encode()).hexdigest()
-SESSIONS: dict = {}
-SESSIONS_LOCK = asyncio.Lock()
-
-async def create_session() -> str:
-    token = secrets.token_urlsafe(32)
-    async with SESSIONS_LOCK:
-        SESSIONS[token] = time.time() + SESSION_TTL
-    return token
-
-async def is_valid_session(token: str | None) -> bool:
-    if not token:
-        return False
-    async with SESSIONS_LOCK:
-        exp = SESSIONS.get(token)
-        if exp is None or exp < time.time():
-            SESSIONS.pop(token, None)
-            return False
-        return True
-
-async def destroy_session(token: str | None):
-    if token:
-        async with SESSIONS_LOCK:
-            SESSIONS.pop(token, None)
-
-async def require_auth(request: Request):
-    token = request.cookies.get(SESSION_COOKIE)
-    if not await is_valid_session(token):
-        raise HTTPException(status_code=401, detail="unauthorized")
-    return token
 
 async def keep_alive():
     while True:
@@ -144,26 +112,26 @@ async def api_login(request: Request):
     password = str(body.get("password") or "")
     if hash_password(password) != db.get_admin_password_hash():
         raise HTTPException(status_code=401, detail="Invalid password")
-    token = await create_session()
+    token = await auth.create_session()
     resp = JSONResponse({"ok": True})
-    resp.set_cookie(key=SESSION_COOKIE, value=token, max_age=SESSION_TTL, httponly=True, samesite="lax", path="/")
+    resp.set_cookie(key=auth.SESSION_COOKIE, value=token, max_age=auth.SESSION_TTL, httponly=True, samesite="lax", path="/")
     return resp
 
 @app.post("/api/logout")
 async def api_logout(request: Request):
-    token = request.cookies.get(SESSION_COOKIE)
-    await destroy_session(token)
+    token = request.cookies.get(auth.SESSION_COOKIE)
+    await auth.destroy_session(token)
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(SESSION_COOKIE, path="/")
+    resp.delete_cookie(auth.SESSION_COOKIE, path="/")
     return resp
 
 @app.get("/api/me")
 async def api_me(request: Request):
-    token = request.cookies.get(SESSION_COOKIE)
-    return {"authenticated": await is_valid_session(token)}
+    token = request.cookies.get(auth.SESSION_COOKIE)
+    return {"authenticated": await auth.is_valid_session(token)}
 
 @app.post("/api/change-password")
-async def api_change_password(request: Request, _=Depends(require_auth)):
+async def api_change_password(request: Request, _=Depends(auth.require_auth)):
     body = await request.json()
     current = str(body.get("current_password") or "")
     new = str(body.get("new_password") or "")
@@ -173,15 +141,12 @@ async def api_change_password(request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
     
     db.update_admin_password_hash(hash_password(new))
-    current_token = request.cookies.get(SESSION_COOKIE)
-    async with SESSIONS_LOCK:
-        SESSIONS.clear()
-        if current_token:
-            SESSIONS[current_token] = time.time() + SESSION_TTL
+    current_token = request.cookies.get(auth.SESSION_COOKIE)
+    await auth.clear_other_sessions(current_token)
     return {"ok": True}
 
 @app.get("/stats")
-async def get_stats(_=Depends(require_auth)):
+async def get_stats(_=Depends(auth.require_auth)):
     return {
         "active_connections": len(connections),
         "total_traffic_mb": round(stats["total_bytes"] / (1024 * 1024), 2),
@@ -198,7 +163,7 @@ async def get_stats(_=Depends(require_auth)):
     }
 
 @app.post("/api/links")
-async def create_link(request: Request, _=Depends(require_auth)):
+async def create_link(request: Request, _=Depends(auth.require_auth)):
     body = await request.json()
     label = (body.get("label") or "New Link").strip()[:60]
     limit_value = float(body.get("limit_value") or 0)
@@ -210,7 +175,7 @@ async def create_link(request: Request, _=Depends(require_auth)):
     return {"uuid": uid, "label": label, "limit_bytes": limit_bytes, "used_bytes": 0, "active": True, "created_at": LINKS[uid]["created_at"], "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{label}")}
 
 @app.get("/api/links")
-async def list_links(_=Depends(require_auth)):
+async def list_links(_=Depends(auth.require_auth)):
     result = []
     async with LINKS_LOCK:
         for uid, data in LINKS.items():
@@ -219,7 +184,7 @@ async def list_links(_=Depends(require_auth)):
     return {"links": result}
 
 @app.patch("/api/links/{uid}")
-async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
+async def toggle_link(uid: str, request: Request, _=Depends(auth.require_auth)):
     body = await request.json()
     async with LINKS_LOCK:
         if uid not in LINKS:
@@ -237,7 +202,7 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
     return {"ok": True}
 
 @app.delete("/api/links/{uid}")
-async def delete_link(uid: str, _=Depends(require_auth)):
+async def delete_link(uid: str, _=Depends(auth.require_auth)):
     async with LINKS_LOCK:
         LINKS.pop(uid, None)
     await close_connections_for_link(uid)
@@ -341,15 +306,15 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    token = request.cookies.get(SESSION_COOKIE)
-    if await is_valid_session(token):
+    token = request.cookies.get(auth.SESSION_COOKIE)
+    if await auth.is_valid_session(token):
         return RedirectResponse(url="/dashboard")
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
-    token = request.cookies.get(SESSION_COOKIE)
-    if not await is_valid_session(token):
+    token = request.cookies.get(auth.SESSION_COOKIE)
+    if not await auth.is_valid_session(token):
         return RedirectResponse(url="/login")
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
