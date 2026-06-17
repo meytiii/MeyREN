@@ -370,13 +370,8 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
             try: writer.close()
             except: pass
         connections.pop(conn_id, None)
-        connection_sockets.pop(conn_id, None)
-
-<<<<<<< Updated upstream
-=======
 
 
->>>>>>> Stashed changes
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     token = request.cookies.get(auth.SESSION_COOKIE)
