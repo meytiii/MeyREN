@@ -196,9 +196,9 @@ body[dir="rtl"]{direction:rtl;text-align:right}
 
 <div class="mobile-header">
   <span style="font-weight:700;font-size:13px">MeyREN</span>
-  <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('show')">&#9776;</button>
+  <button class="menu-toggle" id="menu-toggle-btn">&#9776;</button>
 </div>
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="document.getElementById('sidebar').classList.remove('open');this.classList.remove('show')"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
 
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
@@ -218,7 +218,7 @@ body[dir="rtl"]{direction:rtl;text-align:right}
       <span class="brand-name">MeyREN</span>
     </div>
     <div class="sidebar-brand-right">
-      <button onclick="toggleTheme()" id="theme-btn" title="Toggle theme">
+      <button id="theme-btn" title="Toggle theme">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
       </button>
     </div>
@@ -246,10 +246,10 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   </nav>
   <div class="sidebar-footer">
     <div class="footer-row">
-      <button class="footer-btn active" onclick="setLang('en')" id="lang-en">EN</button>
-      <button class="footer-btn" onclick="setLang('fa')" id="lang-fa">FA</button>
+      <button class="footer-btn active" id="lang-en">EN</button>
+      <button class="footer-btn" id="lang-fa">FA</button>
     </div>
-    <button class="logout-btn" onclick="fetch('/api/logout',{method:'POST'}).then(()=>location.href='/login')">
+    <button class="logout-btn" id="logout-btn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       <span data-en="Logout" data-fa="خروج">Logout</span>
     </button>
@@ -269,8 +269,8 @@ body[dir="rtl"]{direction:rtl;text-align:right}
         <div class="page-sub" id="last-update">Updated: --</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-secondary" onclick="quickCreate(0.5,'GB')">+ 0.5 GB</button>
-        <button class="btn btn-primary" onclick="quickCreate(1,'GB')">+ 1 GB</button>
+        <button class="btn btn-secondary" id="btn-quick-half">+ 0.5 GB</button>
+        <button class="btn btn-primary" id="btn-quick-full">+ 1 GB</button>
       </div>
     </div>
     <div class="stats-row">
@@ -313,17 +313,17 @@ body[dir="rtl"]{direction:rtl;text-align:right}
         <div class="page-title" data-en="Inbounds" data-fa="اینباندها">Inbounds</div>
         <div class="page-sub">VLESS over WebSocket</div>
       </div>
-      <button class="btn btn-primary" onclick="showAddModal()">+ Add</button>
+      <button class="btn btn-primary" id="btn-add-modal">+ Add</button>
     </div>
     <div class="inbounds-toolbar">
       <div class="search-box">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="inbound-search" placeholder="Search by name or UUID..." oninput="filterInbounds()">
+        <input id="inbound-search" placeholder="Search by name or UUID...">
       </div>
       <div class="filter-chips">
-        <button class="chip active" onclick="setFilter('all',this)">All</button>
-        <button class="chip" onclick="setFilter('active',this)">Active</button>
-        <button class="chip" onclick="setFilter('disabled',this)">Disabled</button>
+        <button class="chip active" id="filter-all">All</button>
+        <button class="chip" id="filter-active">Active</button>
+        <button class="chip" id="filter-disabled">Disabled</button>
       </div>
     </div>
     <div class="card" style="border-radius:12px;overflow:hidden;padding:0">
@@ -371,14 +371,14 @@ body[dir="rtl"]{direction:rtl;text-align:right}
         <label class="form-label">New Password</label>
         <input class="form-input" type="password" id="new-pw" placeholder="Min 4 characters">
       </div>
-      <button class="btn btn-primary" onclick="changePassword()" style="margin-top:4px">Update Password</button>
+      <button class="btn btn-primary" id="btn-update-pw" style="margin-top:4px">Update Password</button>
     </div>
   </section>
 </main>
 
-<dialog class="modal-dialog" id="add-modal" onclick="if(event.target===this)this.close()">
+<dialog class="modal-dialog" id="add-modal">
   <div class="modal-content">
-    <button class="modal-close" onclick="$('#add-modal').close()">x</button>
+    <button class="modal-close" id="add-modal-close">x</button>
     <div class="modal-title">Add Inbound</div>
     <div class="form-group">
       <label class="form-label">Remark</label>
@@ -394,13 +394,13 @@ body[dir="rtl"]{direction:rtl;text-align:right}
         <select class="form-select" id="new-unit"><option value="GB">GB</option></select>
       </div>
     </div>
-    <button class="btn btn-primary" onclick="createLink()" style="width:100%;margin-top:8px;justify-content:center">Create</button>
+    <button class="btn btn-primary" id="btn-create-link" style="width:100%;margin-top:8px;justify-content:center">Create</button>
   </div>
 </dialog>
 
-<dialog class="modal-dialog" id="detail-modal" onclick="if(event.target===this)this.close()">
+<dialog class="modal-dialog" id="detail-modal">
   <div class="modal-content" style="max-width:540px">
-    <button class="modal-close" onclick="$('#detail-modal').close()">x</button>
+    <button class="modal-close" id="detail-modal-close">x</button>
     <div class="modal-title" id="detail-title">Inbound Details</div>
     <div id="detail-content">
       <div class="detail-row">
@@ -425,14 +425,14 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   </div>
 </dialog>
 
-<dialog class="modal-dialog" id="qr-modal" onclick="if(event.target===this)this.close()">
+<dialog class="modal-dialog" id="qr-modal">
   <div class="modal-content">
-    <button class="modal-close" onclick="$('#qr-modal').close()">x</button>
+    <button class="modal-close" id="qr-modal-close">x</button>
     <div class="modal-title">QR Code</div>
     <div class="qr-box"><img id="qr-img" src="" alt="QR"></div>
     <div style="margin-top:14px;text-align:center;display:flex;gap:8px;justify-content:center">
-      <button class="btn btn-primary btn-sm" onclick="downloadQR()" style="padding:8px 20px">Download</button>
-      <button class="btn btn-secondary btn-sm" onclick="$('#qr-modal').close()" style="padding:8px 20px">Close</button>
+      <button class="btn btn-primary btn-sm" id="btn-download-qr" style="padding:8px 20px">Download</button>
+      <button class="btn btn-secondary btn-sm" id="btn-close-qr" style="padding:8px 20px">Close</button>
     </div>
   </div>
 </dialog>
@@ -672,6 +672,35 @@ function updateChart(){
   trafficChart.data.labels=labels;trafficChart.data.datasets[0].data=data;
   trafficChart.update();
 }
+$('#menu-toggle-btn').addEventListener('click', () => { $('#sidebar').classList.toggle('open'); $('#sidebar-overlay').classList.toggle('show'); });
+$('#sidebar-overlay').addEventListener('click', function() { $('#sidebar').classList.remove('open'); this.classList.remove('show'); });
+$('#theme-btn').addEventListener('click', toggleTheme);
+$('#lang-en').addEventListener('click', () => setLang('en'));
+$('#lang-fa').addEventListener('click', () => setLang('fa'));
+$('#logout-btn').addEventListener('click', () => { fetch('/api/logout',{method:'POST'}).then(()=>location.href='/login'); });
+
+$('#btn-quick-half').addEventListener('click', () => quickCreate(0.5,'GB'));
+$('#btn-quick-full').addEventListener('click', () => quickCreate(1,'GB'));
+$('#btn-add-modal').addEventListener('click', () => $('#add-modal').showModal());
+$('#inbound-search').addEventListener('input', filterInbounds);
+
+$('#filter-all').addEventListener('click', function() { setFilter('all', this); });
+$('#filter-active').addEventListener('click', function() { setFilter('active', this); });
+$('#filter-disabled').addEventListener('click', function() { setFilter('disabled', this); });
+
+$('#btn-update-pw').addEventListener('click', changePassword);
+
+$('#add-modal-close').addEventListener('click', () => $('#add-modal').close());
+$('#btn-create-link').addEventListener('click', createLink);
+$('#add-modal').addEventListener('click', function(e) { if(e.target === this) this.close(); });
+
+$('#detail-modal-close').addEventListener('click', () => $('#detail-modal').close());
+$('#detail-modal').addEventListener('click', function(e) { if(e.target === this) this.close(); });
+
+$('#qr-modal-close').addEventListener('click', () => $('#qr-modal').close());
+$('#btn-download-qr').addEventListener('click', downloadQR);
+$('#btn-close-qr').addEventListener('click', () => $('#qr-modal').close());
+$('#qr-modal').addEventListener('click', function(e) { if(e.target === this) this.close(); });
 </script>
 </body>
 </html>
