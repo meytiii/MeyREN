@@ -65,7 +65,7 @@ body[dir="rtl"]{direction:rtl;text-align:right}
 .table tr:last-child td{border-bottom:none}
 .table tbody tr:hover td{background:var(--primary-dim)}
 
-.tag{display:inline-flex;align-items:center;padding:3px 8px;border-
+.tag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase}
 .tag-vless{background:var(--primary-dim);color:var(--primary)}
 .tag-active{background:var(--green-dim);color:var(--green)}
 .tag-disabled{background:var(--red-dim);color:var(--red)}
