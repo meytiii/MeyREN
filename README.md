@@ -6,8 +6,6 @@
 
 ## 📌 نحوه کارکرد
 
-MeyREN Gateway یک تونل VLESS روی WebSocket است که روی Railway (هاست ابری) اجرا می‌شود.
-
 نیازی به سرور VPS ندارید. فقط کافیه پروژه را از [مخزن MeyREN](https://www.google.com/search?q=https://github.com/meytiii/MeyREN) فورک کنید و روی Railway دیپلوی کنید.
 
 بعد از دیپلوی، یک آدرس دامنه اختصاصی از Railway بهتون داده می‌شود که پنل مدیریت شماست.
