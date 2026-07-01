@@ -117,10 +117,11 @@ body[dir="rtl"]{direction:rtl;text-align:right}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .toast.error{border-color:var(--red-dim);color:var(--red)}
 
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
-.modal-overlay.show{display:flex}
-.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;max-width:460px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.3);transform:scale(0.9);opacity:0;transition:all .3s cubic-bezier(0.34,1.56,0.64,1)}
-.modal-overlay.show .modal{transform:scale(1);opacity:1}
+.modal-dialog {border:none;background:transparent;padding:0;margin:auto;width:100%;max-width:460px;outline:none;}
+.modal-dialog::backdrop {background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);}
+.modal-content {background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:100%;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+.modal-dialog[open] .modal-content {animation: modalIn .3s cubic-bezier(0.34,1.56,0.64,1) forwards;}
+@keyframes modalIn { from {transform:scale(0.9);opacity:0;} to {transform:scale(1);opacity:1;} }
 .modal-title{font-size:15px;font-weight:700;margin-bottom:18px;color:var(--text)}
 .modal-close{position:absolute;top:12px;left:12px;background:var(--surface3);border:1px solid var(--border);color:var(--text3);width:28px;height:28px;border-radius:7px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .modal-close:hover{background:var(--red-dim);color:var(--red);border-color:rgba(255,77,106,0.2)}
@@ -375,9 +376,9 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   </section>
 </main>
 
-<div class="modal-overlay" id="add-modal" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal" style="position:relative">
-    <button class="modal-close" onclick="$('#add-modal').classList.remove('show')">x</button>
+<dialog class="modal-dialog" id="add-modal" onclick="if(event.target===this)this.close()">
+  <div class="modal-content">
+    <button class="modal-close" onclick="$('#add-modal').close()">x</button>
     <div class="modal-title">Add Inbound</div>
     <div class="form-group">
       <label class="form-label">Remark</label>
@@ -395,27 +396,96 @@ body[dir="rtl"]{direction:rtl;text-align:right}
     </div>
     <button class="btn btn-primary" onclick="createLink()" style="width:100%;margin-top:8px;justify-content:center">Create</button>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="detail-modal" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal" style="position:relative;max-width:540px">
-    <button class="modal-close" onclick="$('#detail-modal').classList.remove('show')">x</button>
+<dialog class="modal-dialog" id="detail-modal" onclick="if(event.target===this)this.close()">
+  <div class="modal-content" style="max-width:540px">
+    <button class="modal-close" onclick="$('#detail-modal').close()">x</button>
     <div class="modal-title" id="detail-title">Inbound Details</div>
-    <div id="detail-content"></div>
+    <div id="detail-content">
+      <div class="detail-row">
+        <div class="detail-col"><div class="detail-label">Protocol</div><div class="detail-value" style="font-family:inherit"><span class="tag tag-vless">VLESS</span></div></div>
+        <div class="detail-col"><div class="detail-label">Status</div><div class="detail-value" style="font-family:inherit"><span id="det-status" class="tag"></span></div></div>
+      </div>
+      <div style="margin-bottom:12px"><div class="detail-label">UUID</div><div class="detail-value" id="det-uuid"></div></div>
+      <div class="detail-row">
+        <div class="detail-col"><div class="detail-label">Used</div><div class="detail-value" id="det-used"></div></div>
+        <div class="detail-col"><div class="detail-label">Limit</div><div class="detail-value" id="det-limit"></div></div>
+        <div class="detail-col"><div class="detail-label">Usage</div><div class="detail-value" id="det-pct"></div></div>
+      </div>
+      <div class="sys-bar" style="margin-bottom:12px"><div class="sys-bar-fill" id="det-bar"></div></div>
+      <div style="margin-bottom:12px"><div class="detail-label">Created</div><div class="detail-value" style="font-family:inherit" id="det-created"></div></div>
+      <div style="margin-bottom:0"><div class="detail-label">VLESS Link</div><div class="detail-value" id="det-link"></div></div>
+      <div class="detail-actions">
+        <button class="btn-copy" id="det-act-copy" style="padding:8px 18px;font-size:12px">Copy</button>
+        <button class="btn-qr" id="det-act-qr" style="padding:8px 18px;font-size:12px">QR Code</button>
+        <button class="btn btn-secondary btn-sm" id="det-act-reset" style="padding:8px 18px">Reset Traffic</button>
+      </div>
+    </div>
   </div>
-</div>
+</dialog>
 
-<div class="modal-overlay" id="qr-modal" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal" style="position:relative">
-    <button class="modal-close" onclick="$('#qr-modal').classList.remove('show')">x</button>
+<dialog class="modal-dialog" id="qr-modal" onclick="if(event.target===this)this.close()">
+  <div class="modal-content">
+    <button class="modal-close" onclick="$('#qr-modal').close()">x</button>
     <div class="modal-title">QR Code</div>
     <div class="qr-box"><img id="qr-img" src="" alt="QR"></div>
     <div style="margin-top:14px;text-align:center;display:flex;gap:8px;justify-content:center">
       <button class="btn btn-primary btn-sm" onclick="downloadQR()" style="padding:8px 20px">Download</button>
-      <button class="btn btn-secondary btn-sm" onclick="$('#qr-modal').classList.remove('show')" style="padding:8px 20px">Close</button>
+      <button class="btn btn-secondary btn-sm" onclick="$('#qr-modal').close()" style="padding:8px 20px">Close</button>
     </div>
   </div>
-</div>
+</dialog>
+
+<template id="tpl-inbound-row">
+  <tr>
+    <td class="col-id" style="color:var(--text3);font-size:11px"></td>
+    <td class="col-name" style="font-weight:600;font-size:13px"></td>
+    <td><span class="tag tag-vless">VLESS</span></td>
+    <td>
+      <div class="usage-pill">
+        <span class="col-used used"></span>
+        <div class="bar"><div class="col-fill fill"></div></div>
+        <span class="col-limit limit"></span>
+      </div>
+    </td>
+    <td><span class="col-status tag"></span></td>
+    <td>
+      <div style="display:flex;gap:3px;align-items:center">
+        <button class="act-toggle toggle" title="Toggle"></button>
+        <button class="act-info btn btn-secondary btn-sm" title="Info">i</button>
+        <button class="act-copy btn-copy" title="Copy">c</button>
+        <button class="act-qr btn-qr" title="QR">qr</button>
+        <button class="act-del btn btn-danger btn-sm" title="Delete">x</button>
+      </div>
+    </td>
+  </tr>
+</template>
+
+<template id="tpl-inbound-card">
+  <div class="inbound-card">
+    <div class="inbound-card-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="col-id inbound-card-id"></span>
+        <span class="col-name inbound-card-name"></span>
+        <span class="tag tag-vless">VLESS</span>
+      </div>
+      <button class="act-toggle toggle"></button>
+    </div>
+    <div class="usage-pill">
+      <span class="col-used used"></span>
+      <div class="bar"><div class="col-fill fill"></div></div>
+      <span class="col-limit limit"></span>
+    </div>
+    <div class="inbound-card-actions">
+      <button class="act-info btn btn-secondary btn-sm">i</button>
+      <button class="act-copy btn-copy">c</button>
+      <button class="act-qr btn-qr">qr</button>
+      <button class="act-reset btn btn-secondary btn-sm">r</button>
+      <button class="act-del btn btn-danger btn-sm">x</button>
+    </div>
+  </div>
+</template>
 
 <script>
 let lang=localStorage.getItem('ren_lang')||'en';
@@ -425,7 +495,7 @@ let allLinks=[];let currentFilter='all';let statsData={};let trafficChart=null;
 function setLang(l){lang=l;document.getElementById('lang-en').classList.toggle('active',l==='en');document.getElementById('lang-fa').classList.toggle('active',l==='fa');document.body.dir=l==='fa'?'rtl':'ltr';document.querySelectorAll('[data-en]').forEach(el=>{const v=el.getAttribute('data-'+l);if(v)el.textContent=v});localStorage.setItem('ren_lang',l)}
 function applyTheme(t){theme=t;document.documentElement.setAttribute('data-theme',t);localStorage.setItem('ren_theme',t);const btn=$('#theme-btn');if(btn)btn.innerHTML=t==='dark'?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>':'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>'}
 function toggleTheme(){applyTheme(theme==='dark'?'light':'dark')}
-function showAddModal(){$('#add-modal').classList.add('show')}
+function showAddModal(){$('#add-modal').showModal()}
 function setFilter(f,el){currentFilter=f;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');filterInbounds()}
 function filterInbounds(){const q=($('#inbound-search')?.value||'').toLowerCase();let filtered=allLinks;if(currentFilter==='active')filtered=filtered.filter(l=>l.active);if(currentFilter==='disabled')filtered=filtered.filter(l=>!l.active);if(q)filtered=filtered.filter(l=>l.label.toLowerCase().includes(q)||l.uuid.toLowerCase().includes(q));renderLinks(filtered)}
 function fmtBytes(b){return b>1073741824?(b/1073741824).toFixed(2)+' GB':b>1048576?(b/1048576).toFixed(2)+' MB':(b/1024).toFixed(1)+' KB'}
@@ -436,7 +506,6 @@ const $$=s=>document.querySelectorAll(s);
 $$('.nav-item').forEach(el=>el.addEventListener('click',()=>switchPage(el.dataset.page)));
 function switchPage(id){$$('.page').forEach(p=>p.classList.remove('active'));$(`#page-${id}`)?.classList.add('active');$$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===id));$('#sidebar').classList.remove('open');$('#sidebar-overlay').classList.remove('show')}
 function toast(msg,err=false){const t=$('#toast');t.textContent=msg;t.className='toast'+(err?' error':'')+' show';setTimeout(()=>t.classList.remove('show'),3000)}
-function esc(s){return s.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
 async function loadStats(){
   try{
@@ -460,50 +529,90 @@ async function loadLinks(){try{const r=await fetch('/api/links');if(!r.ok)throw 
 
 function renderLinks(links){
   const tbody=$('#links-tbody');const empty=$('#links-empty');const cards=$('#inbound-cards');
-  if(!links.length){tbody.innerHTML='';cards.innerHTML='';empty.style.display='block';return;}
+  tbody.textContent=''; cards.textContent='';
+  if(!links.length){empty.style.display='block';return;}
   empty.style.display='none';
+  
+  const rowTpl=$('#tpl-inbound-row').content;
+  const cardTpl=$('#tpl-inbound-card').content;
+  const fragTable=document.createDocumentFragment();
+  const fragCards=document.createDocumentFragment();
   let idx=links.length;
-  const rows=links.map(l=>{
+  
+  links.forEach(l=>{
     const u=l.used_bytes,lim=l.limit_bytes;
     const uF=fmtBytes(u);const lF=fmtLimit(lim);
     const pct=lim>0?Math.min(100,(u/lim)*100):0;
     const col=pct>90?'var(--red)':pct>70?'var(--yellow)':'var(--primary)';
     const i=idx--;
-    return {l,uF,lF,pct,col,i};
+    
+    const row = document.importNode(rowTpl, true);
+    row.querySelector('.col-id').textContent = i;
+    row.querySelector('.col-name').textContent = l.label;
+    row.querySelector('.col-used').textContent = uF;
+    row.querySelector('.col-limit').textContent = lF;
+    row.querySelector('.col-fill').style.width = pct + '%';
+    row.querySelector('.col-fill').style.background = col;
+    const rStatus = row.querySelector('.col-status');
+    rStatus.textContent = l.active ? 'On' : 'Off';
+    rStatus.className = 'col-status tag ' + (l.active ? 'tag-active' : 'tag-disabled');
+    const rToggle = row.querySelector('.act-toggle');
+    rToggle.className = 'act-toggle toggle ' + (l.active ? 'on' : '');
+    rToggle.dataset.uid = l.uuid;
+    rToggle.onclick = function() { toggleLink(this); };
+    row.querySelector('.act-info').onclick = function() { showDetail(l.uuid); };
+    row.querySelector('.act-copy').onclick = function() { copyLinkText(l.vless_link); };
+    row.querySelector('.act-qr').onclick = function() { showQRText(l.vless_link); };
+    row.querySelector('.act-del').onclick = function() { deleteLink(l.uuid); };
+    fragTable.appendChild(row);
+    
+    const card = document.importNode(cardTpl, true);
+    card.querySelector('.col-id').textContent = '#' + i;
+    card.querySelector('.col-name').textContent = l.label;
+    card.querySelector('.col-used').textContent = uF;
+    card.querySelector('.col-limit').textContent = lF;
+    card.querySelector('.col-fill').style.width = pct + '%';
+    card.querySelector('.col-fill').style.background = col;
+    const cToggle = card.querySelector('.act-toggle');
+    cToggle.className = 'act-toggle toggle ' + (l.active ? 'on' : '');
+    cToggle.dataset.uid = l.uuid;
+    cToggle.onclick = function() { toggleLink(this); };
+    card.querySelector('.act-info').onclick = function() { showDetail(l.uuid); };
+    card.querySelector('.act-copy').onclick = function() { copyLinkText(l.vless_link); };
+    card.querySelector('.act-qr').onclick = function() { showQRText(l.vless_link); };
+    card.querySelector('.act-reset').onclick = function() { resetUsage(l.uuid); };
+    card.querySelector('.act-del').onclick = function() { deleteLink(l.uuid); };
+    fragCards.appendChild(card);
   });
-  tbody.innerHTML=rows.map(r=>`<tr>
-    <td style="color:var(--text3);font-size:11px">${r.i}</td>
-    <td style="font-weight:600;font-size:13px">${esc(r.l.label)}</td>
-    <td><span class="tag tag-vless">VLESS</span></td>
-    <td><div class="usage-pill"><span class="used">${r.uF}</span><div class="bar"><div class="fill" style="width:${r.pct}%;background:${r.col}"></div></div><span class="limit">${r.lF}</span></div></td>
-    <td><span class="tag ${r.l.active?'tag-active':'tag-disabled'}">${r.l.active?'On':'Off'}</span></td>
-    <td><div style="display:flex;gap:3px;align-items:center">
-      <button class="toggle ${r.l.active?'on':''}" data-uid="${r.l.uuid}" onclick="toggleLink(this)" title="Toggle"></button>
-      <button class="btn btn-secondary btn-sm" onclick="showDetail('${r.l.uuid}')" title="Info">i</button>
-      <button class="btn-copy" onclick="copyLinkText('${esc(r.l.vless_link)}')" title="Copy">c</button>
-      <button class="btn-qr" onclick="showQRText('${esc(r.l.vless_link)}')" title="QR">qr</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteLink('${r.l.uuid}')" title="Delete">x</button>
-    </div></td>
-  </tr>`).join('');
+  
+  tbody.appendChild(fragTable);
+  cards.appendChild(fragCards);
+}
 
-  cards.innerHTML=rows.map(r=>`<div class="inbound-card">
-    <div class="inbound-card-header">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="inbound-card-id">#${r.i}</span>
-        <span class="inbound-card-name">${esc(r.l.label)}</span>
-        <span class="tag tag-vless">VLESS</span>
-      </div>
-      <button class="toggle ${r.l.active?'on':''}" data-uid="${r.l.uuid}" onclick="toggleLink(this)"></button>
-    </div>
-    <div class="usage-pill"><span class="used">${r.uF}</span><div class="bar"><div class="fill" style="width:${r.pct}%;background:${r.col}"></div></div><span class="limit">${r.lF}</span></div>
-    <div class="inbound-card-actions">
-      <button class="btn btn-secondary btn-sm" onclick="showDetail('${r.l.uuid}')">i</button>
-      <button class="btn-copy" onclick="copyLinkText('${esc(r.l.vless_link)}')">c</button>
-      <button class="btn-qr" onclick="showQRText('${esc(r.l.vless_link)}')">qr</button>
-      <button class="btn btn-secondary btn-sm" onclick="resetUsage('${r.l.uuid}')">r</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteLink('${r.l.uuid}')">x</button>
-    </div>
-  </div>`).join('');
+function showDetail(uid){
+  const l=allLinks.find(x=>x.uuid===uid);if(!l)return;
+  const u=l.used_bytes,lim=l.limit_bytes;const uF=fmtBytes(u);const lF=fmtLimit(lim);
+  const pct=lim>0?Math.min(100,(u/lim)*100):0;const col=pct>90?'var(--red)':pct>70?'var(--yellow)':'var(--primary)';
+  const created=l.created_at?new Date(l.created_at).toLocaleString(lang==='fa'?'fa-IR':'en-US'):'--';
+  
+  $('#detail-title').textContent=l.label;
+  const stat = $('#det-status');
+  stat.textContent = l.active ? 'Active' : 'Disabled';
+  stat.className = 'tag ' + (l.active ? 'tag-active' : 'tag-disabled');
+  $('#det-uuid').textContent = l.uuid;
+  $('#det-used').textContent = uF;
+  $('#det-limit').textContent = lF;
+  $('#det-pct').textContent = pct.toFixed(1) + '%';
+  $('#det-bar').style.width = pct + '%';
+  $('#det-bar').style.background = col;
+  $('#det-created').textContent = created;
+  $('#det-link').textContent = l.vless_link;
+  
+  $('#det-act-copy').onclick = function() { copyLinkText(l.vless_link); $('#detail-modal').close(); };
+  $('#det-act-qr').onclick = function() { showQRText(l.vless_link); $('#detail-modal').close(); };
+  $('#det-act-reset').onclick = function() { resetUsage(l.uuid); $('#detail-modal').close(); };
+  
+  $('#detail-modal').showModal();
 }
 
 async function toggleLink(el){
@@ -528,42 +637,14 @@ async function quickCreate(limit,unit){
 async function createLink(){
   const label=$('#new-label').value.trim()||'New Link';const val=parseFloat($('#new-limit').value)||0;const unit='GB';
   if(!/^[a-zA-Z0-9\-_. ]+$/.test(label)){toast('Only English letters allowed',true);return;}
-  try{const r=await fetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val,limit_unit:unit})});if(!r.ok)throw new Error();toast('Created');$('#new-label').value='';$('#new-limit').value='';$('#add-modal').classList.remove('show');await loadLinks();await loadStats();}catch(e){toast('Error',true)}
+  try{const r=await fetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:val,limit_unit:unit})});if(!r.ok)throw new Error();toast('Created');$('#new-label').value='';$('#new-limit').value='';$('#add-modal').close();await loadLinks();await loadStats();}catch(e){toast('Error',true)}
 }
 
 async function resetUsage(uid){try{await fetch(`/api/links/${uid}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_usage:true})});toast('Reset');await loadLinks();}catch(e){}}
 async function deleteLink(uid){if(!confirm('Delete this inbound?'))return;try{await fetch(`/api/links/${uid}`,{method:'DELETE'});toast('Deleted');await loadLinks();await loadStats();}catch(e){}}
 
-function showDetail(uid){
-  const l=allLinks.find(x=>x.uuid===uid);if(!l)return;
-  const u=l.used_bytes,lim=l.limit_bytes;const uF=fmtBytes(u);const lF=fmtLimit(lim);
-  const pct=lim>0?Math.min(100,(u/lim)*100):0;const col=pct>90?'var(--red)':pct>70?'var(--yellow)':'var(--primary)';
-  const created=l.created_at?new Date(l.created_at).toLocaleString(lang==='fa'?'fa-IR':'en-US'):'--';
-  $('#detail-title').textContent=l.label;
-  $('#detail-content').innerHTML=`
-    <div class="detail-row">
-      <div class="detail-col"><div class="detail-label">Protocol</div><div class="detail-value" style="font-family:inherit"><span class="tag tag-vless">VLESS</span></div></div>
-      <div class="detail-col"><div class="detail-label">Status</div><div class="detail-value" style="font-family:inherit"><span class="tag ${l.active?'tag-active':'tag-disabled'}">${l.active?'Active':'Disabled'}</span></div></div>
-    </div>
-    <div style="margin-bottom:12px"><div class="detail-label">UUID</div><div class="detail-value">${l.uuid}</div></div>
-    <div class="detail-row">
-      <div class="detail-col"><div class="detail-label">Used</div><div class="detail-value">${uF}</div></div>
-      <div class="detail-col"><div class="detail-label">Limit</div><div class="detail-value">${lF}</div></div>
-      <div class="detail-col"><div class="detail-label">Usage</div><div class="detail-value">${pct.toFixed(1)}%</div></div>
-    </div>
-    <div class="sys-bar" style="margin-bottom:12px"><div class="sys-bar-fill" style="width:${pct}%;background:${col}"></div></div>
-    <div style="margin-bottom:12px"><div class="detail-label">Created</div><div class="detail-value" style="font-family:inherit">${created}</div></div>
-    <div style="margin-bottom:0"><div class="detail-label">VLESS Link</div><div class="detail-value">${esc(l.vless_link)}</div></div>
-    <div class="detail-actions">
-      <button class="btn-copy" onclick="copyLinkText('${esc(l.vless_link)}');$('#detail-modal').classList.remove('show')" style="padding:8px 18px;font-size:12px">Copy</button>
-      <button class="btn-qr" onclick="showQRText('${esc(l.vless_link)}');$('#detail-modal').classList.remove('show')" style="padding:8px 18px;font-size:12px">QR Code</button>
-      <button class="btn btn-secondary btn-sm" onclick="resetUsage('${l.uuid}');$('#detail-modal').classList.remove('show')" style="padding:8px 18px">Reset Traffic</button>
-    </div>`;
-  $('#detail-modal').classList.add('show');
-}
-
 function copyLinkText(txt){navigator.clipboard.writeText(txt).then(()=>toast('Copied to clipboard')).catch(()=>toast('Failed to copy',true))}
-function showQRText(txt){if(!txt)return;const box=document.querySelector('.qr-box');box.classList.remove('animate-in','animate-glow');$('#qr-img').src='https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+encodeURIComponent(txt);$('#qr-modal').classList.add('show');requestAnimationFrame(()=>{box.classList.add('animate-in');setTimeout(()=>box.classList.add('animate-glow'),500)})}
+function showQRText(txt){if(!txt)return;const box=document.querySelector('.qr-box');box.classList.remove('animate-in','animate-glow');$('#qr-img').src='https://api.qrserver.com/v1/create-qr-code/?size=300x300&data='+encodeURIComponent(txt);$('#qr-modal').showModal();requestAnimationFrame(()=>{box.classList.add('animate-in');setTimeout(()=>box.classList.add('animate-glow'),500)})}
 function downloadQR(){const img=$('#qr-img');if(!img.src)return;const a=document.createElement('a');a.href=img.src;a.download='ren-qr.png';a.click()}
 
 async function changePassword(){

@@ -15,7 +15,6 @@ from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResp
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-import httpx
 import logging
 import psutil
 
@@ -46,36 +45,13 @@ connection_sockets: dict = {}
 stats = {"total_bytes": 0, "total_requests": 0, "total_errors": 0, "start_time": time.time()}
 error_logs: deque = deque(maxlen=50)
 hourly_traffic: dict = defaultdict(int)
-http_client: httpx.AsyncClient | None = None
 
 def hash_password(pw: str) -> str:
     return hashlib.sha256(f"{pw}{CONFIG['secret']}".encode()).hexdigest()
 
-async def keep_alive():
-    while True:
-        await asyncio.sleep(600)
-        try:
-            domain = utils.get_domain()
-            if domain and domain != "localhost":
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    await client.get(f"https://{domain}/health")
-                logger.info("Keep-alive ping sent")
-        except Exception:
-            pass
-
 @app.on_event("startup")
 async def startup():
-    global http_client
-    limits = httpx.Limits(max_connections=500, max_keepalive_connections=100)
-    timeout = httpx.Timeout(30.0, connect=10.0)
-    http_client = httpx.AsyncClient(limits=limits, timeout=timeout, follow_redirects=True)
     logger.info(f"MeyREN started on port {CONFIG['port']}")
-    asyncio.create_task(keep_alive())
-
-@app.on_event("shutdown")
-async def shutdown():
-    if http_client:
-        await http_client.aclose()
 
 async def ensure_default_link():
     links = db.get_links()
