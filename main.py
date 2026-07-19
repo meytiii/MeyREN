@@ -51,9 +51,21 @@ hourly_traffic: dict = defaultdict(int)
 def hash_password(pw: str) -> str:
     return hashlib.sha256(f"{pw}{CONFIG['secret']}".encode()).hexdigest()
 
+async def keep_alive_task():
+    import urllib.request
+    while True:
+        await asyncio.sleep(600)
+        domain = utils.get_domain()
+        if domain and domain != "localhost":
+            try:
+                await asyncio.to_thread(urllib.request.urlopen, f"https://{domain}/health")
+            except Exception as e:
+                logger.warning(f"Keepalive ping failed: {e}")
+
 @app.on_event("startup")
 async def startup():
     logger.info(f"MeyREN started on port {CONFIG['port']}")
+    asyncio.create_task(keep_alive_task())
 
 async def ensure_default_link():
     links = db.get_links()

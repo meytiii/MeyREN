@@ -1,12 +1,10 @@
 services:
   - type: web
-    name: ren-gateway
+    name: meyren
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     envVars:
-      - key: ADMIN_PASSWORD
-        sync: false
       - key: SECRET_KEY
         generateValue: true
