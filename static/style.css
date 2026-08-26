@@ -1,5 +1,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 
+img{max-width:100%;height:auto}
+
 html[data-theme="dark"]{
   --bg:#06070d;
   --bg-gradient:radial-gradient(circle at 12% 20%, rgba(0, 242, 254, 0.12), transparent 32%),
@@ -34,7 +36,7 @@ html[data-theme="dark"]{
   --red-glow:rgba(244, 63, 94, 0.3);
   --red-dim:rgba(244, 63, 94, 0.12);
   --yellow:#fbbf24;
-  --sidebar-bg:rgba(8, 9, 18, 0.75);
+  --sidebar-bg:rgba(8, 9, 18, 0.85);
   --shadow:0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(121, 40, 202, 0.1);
   --shadow-neon:0 0 20px rgba(0, 242, 254, 0.25), 0 0 40px rgba(168, 85, 247, 0.15);
 }
@@ -96,10 +98,15 @@ body[dir="rtl"]{direction:rtl;text-align:right}
 
 /* Neon Branding & Logos */
 .brand-logo-img{
-  width:32px;
-  height:32px;
+  width:32px !important;
+  height:32px !important;
+  max-width:32px !important;
+  max-height:32px !important;
+  min-width:32px !important;
+  min-height:32px !important;
   border-radius:9px;
   object-fit:cover;
+  flex-shrink:0;
   filter:drop-shadow(0 0 10px rgba(0,242,254,0.6));
   transition:all .3s ease;
 }
@@ -108,8 +115,10 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   transform:scale(1.08) rotate(3deg);
 }
 .brand-logo-large{
-  width:72px;
-  height:72px;
+  width:72px !important;
+  height:72px !important;
+  max-width:72px !important;
+  max-height:72px !important;
   border-radius:20px;
   object-fit:cover;
   filter:drop-shadow(0 0 20px rgba(0,242,254,0.5)) drop-shadow(0 0 35px rgba(168,85,247,0.4));
@@ -135,16 +144,18 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   top:0;
   bottom:0;
   z-index:100;
+  overflow:hidden;
   transition:transform .4s cubic-bezier(0.16,1,0.3,1),background .4s cubic-bezier(0.16,1,0.3,1);
 }
 .sidebar-brand{
-  padding:18px 16px 14px;
+  padding:16px 14px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   border-bottom:1px solid var(--border);
+  min-height:60px;
 }
-.sidebar-brand-left{display:flex;align-items:center;gap:12px}
+.sidebar-brand-left{display:flex;align-items:center;gap:10px;overflow:hidden}
 .sidebar-brand-left .brand-name{
   font-size:18px;
   font-weight:900;
@@ -152,8 +163,9 @@ body[dir="rtl"]{direction:rtl;text-align:right}
   -webkit-background-clip:text;
   -webkit-text-fill-color:transparent;
   letter-spacing:-0.03em;
+  white-space:nowrap;
 }
-.sidebar-brand-right{display:flex;gap:4px}
+.sidebar-brand-right{display:flex;gap:4px;flex-shrink:0}
 .sidebar-brand-right button{
   width:30px;
   height:30px;
