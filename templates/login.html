@@ -3,41 +3,207 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MeyREN</title>
+<title>MeyREN | Secure Gateway</title>
+<link rel="icon" type="image/png" href="/static/logo.png">
+<link rel="apple-touch-icon" href="/static/logo.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#06070d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Vazirmatn:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html[data-theme="dark"]{--bg:#09090b;--surface:#18181b;--surface2:#27272a;--border:rgba(255,255,255,0.08);--text:#fafafa;--text2:#a1a1aa;--text3:#71717a;--primary:#6366f1;--primary-glow:rgba(99,102,241,0.15);--accent:#4f46e5;--error:#f43f5e;--error-bg:rgba(244,63,94,0.08)}
-html[data-theme="light"]{--bg:#f4f4f5;--surface:#ffffff;--surface2:#e4e4e7;--border:rgba(0,0,0,0.08);--text:#09090b;--text2:#52525b;--text3:#71717a;--primary:#4f46e5;--primary-glow:rgba(79,70,229,0.1);--accent:#4338ca;--error:#e11d48;--error-bg:rgba(225,29,72,0.06)}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);transition:background .3s,color .3s}
+html[data-theme="dark"]{
+  --bg:#06070d;
+  --bg-gradient:radial-gradient(circle at 15% 25%, rgba(0, 242, 254, 0.14), transparent 35%),
+                radial-gradient(circle at 85% 75%, rgba(168, 85, 247, 0.16), transparent 38%),
+                radial-gradient(circle at 50% 50%, rgba(121, 40, 202, 0.08), transparent 50%);
+  --surface:rgba(15, 16, 33, 0.75);
+  --surface2:rgba(25, 27, 52, 0.6);
+  --border:rgba(255,255,255,0.09);
+  --border2:rgba(168, 85, 247, 0.3);
+  --border-glow:rgba(0, 242, 254, 0.35);
+  --text:#f8fafc;
+  --text2:#94a3b8;
+  --text3:#64748b;
+  --primary:#00f2fe;
+  --primary-gradient:linear-gradient(135deg, #00f2fe 0%, #38bdf8 40%, #a855f7 100%);
+  --primary-glow:rgba(0, 242, 254, 0.35);
+  --error:#f43f5e;
+  --error-bg:rgba(244,63,94,0.1);
+}
+html[data-theme="light"]{
+  --bg:#f3f4f8;
+  --bg-gradient:radial-gradient(circle at 15% 25%, rgba(0, 180, 216, 0.1), transparent 35%),
+                radial-gradient(circle at 85% 75%, rgba(147, 51, 234, 0.09), transparent 38%);
+  --surface:rgba(255, 255, 255, 0.85);
+  --surface2:rgba(235, 238, 246, 0.8);
+  --border:rgba(0,0,0,0.08);
+  --border2:rgba(147, 51, 234, 0.25);
+  --border-glow:rgba(2, 132, 199, 0.3);
+  --text:#0f172a;
+  --text2:#475569;
+  --text3:#64748b;
+  --primary:#0284c7;
+  --primary-gradient:linear-gradient(135deg, #0284c7 0%, #38bdf8 50%, #9333ea 100%);
+  --primary-glow:rgba(2, 132, 199, 0.25);
+  --error:#e11d48;
+  --error-bg:rgba(225,29,72,0.08);
+}
+body{
+  font-family:'Inter','Vazirmatn',-apple-system,BlinkMacSystemFont,sans-serif;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background-color:var(--bg);
+  background-image:var(--bg-gradient);
+  background-attachment:fixed;
+  color:var(--text);
+  transition:background .4s,color .4s;
+}
+body[dir="rtl"]{direction:rtl;text-align:right}
 
 .toolbar{position:fixed;top:20px;right:20px;display:flex;gap:6px;z-index:10}
-.toolbar button{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .2s}
-.toolbar button:hover{border-color:var(--primary);color:var(--primary)}
-.toolbar button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+body[dir="rtl"] .toolbar{right:auto;left:20px}
+.toolbar button{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  color:var(--text2);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  font-weight:700;
+  transition:all .2s;
+  backdrop-filter:blur(12px);
+}
+.toolbar button:hover{
+  border-color:var(--primary);
+  color:var(--primary);
+  box-shadow:0 0 12px var(--primary-glow);
+}
 
-.login-page{width:100%;max-width:380px;padding:0 20px}
-.login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:44px 36px 36px;position:relative;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)}
-.login-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--primary)}
+.login-page{width:100%;max-width:400px;padding:0 20px}
+.login-card{
+  background:var(--surface);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
+  border:1px solid var(--border2);
+  border-radius:24px;
+  padding:42px 34px 34px;
+  position:relative;
+  overflow:hidden;
+  box-shadow:0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(168,85,247,0.15);
+  animation:cardIn .5s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+@keyframes cardIn{
+  from{opacity:0;transform:translateY(16px) scale(0.97);}
+  to{opacity:1;transform:translateY(0) scale(1);}
+}
+.login-card::before{
+  content:'';
+  position:absolute;
+  top:0;left:0;right:0;
+  height:3px;
+  background:var(--primary-gradient);
+  box-shadow:0 0 15px var(--primary);
+}
 
-.brand{text-align:center;margin-bottom:36px}
-.brand svg{margin-bottom:20px}
-.brand h1{font-size:20px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
-.brand p{font-size:12px;color:var(--text3);margin-top:6px;font-weight:500;letter-spacing:0.04em;text-transform:uppercase}
+.brand{text-align:center;margin-bottom:30px}
+.brand-logo{
+  width:76px;
+  height:76px;
+  border-radius:20px;
+  object-fit:cover;
+  filter:drop-shadow(0 0 16px rgba(0,242,254,0.5)) drop-shadow(0 0 30px rgba(168,85,247,0.4));
+  margin-bottom:14px;
+  transition:transform .3s;
+}
+.brand-logo:hover{transform:scale(1.06) rotate(3deg)}
+.brand h1{
+  font-size:22px;
+  font-weight:900;
+  background:var(--primary-gradient);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  letter-spacing:-0.03em;
+}
+.brand p{
+  font-size:11px;
+  color:var(--text3);
+  margin-top:4px;
+  font-weight:700;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+}
 
-.form-group{margin-bottom:20px}
-.form-group label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em}
-.form-group input{width:100%;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:all .2s}
-.form-group input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-glow)}
+.form-group{margin-bottom:18px}
+.form-group label{
+  display:block;
+  font-size:11px;
+  font-weight:700;
+  color:var(--text2);
+  margin-bottom:7px;
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+}
+.form-group input{
+  width:100%;
+  padding:12px 14px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  color:var(--text);
+  font-size:14px;
+  font-family:inherit;
+  outline:none;
+  transition:all .2s;
+}
+.form-group input:focus{
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px var(--primary-glow), 0 0 15px var(--primary-glow);
+}
 .form-group input::placeholder{color:var(--text3)}
 
-.login-btn{width:100%;padding:12px;background:var(--primary);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;letter-spacing:0.01em}
-.login-btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 4px 16px rgba(79,124,255,0.3)}
-.login-btn:active{transform:translateY(0)}
+.login-btn{
+  width:100%;
+  padding:12px;
+  background:var(--primary-gradient);
+  border:none;
+  border-radius:12px;
+  color:#fff;
+  font-size:14px;
+  font-weight:800;
+  font-family:inherit;
+  cursor:pointer;
+  transition:all .2s cubic-bezier(0.16,1,0.3,1);
+  letter-spacing:0.02em;
+  box-shadow:0 6px 20px var(--primary-glow);
+}
+.login-btn:hover{
+  filter:brightness(1.1);
+  transform:translateY(-1px);
+  box-shadow:0 8px 25px var(--primary-glow), 0 0 25px rgba(168,85,247,0.4);
+}
+.login-btn:active{transform:scale(0.98)}
 
-.error-msg{background:var(--error-bg);border:1px solid rgba(255,77,106,0.15);color:var(--error);padding:10px 14px;border-radius:10px;font-size:13px;display:none;margin-bottom:20px;text-align:center;font-weight:500}
+.error-msg{
+  background:var(--error-bg);
+  border:1px solid rgba(244,63,94,0.3);
+  color:var(--error);
+  padding:10px 14px;
+  border-radius:10px;
+  font-size:12px;
+  display:none;
+  margin-bottom:16px;
+  text-align:center;
+  font-weight:600;
+}
 .error-msg.show{display:block}
 </style>
 </head>
@@ -51,28 +217,17 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;min-height:
 <div class="login-page">
   <div class="login-card">
     <div class="brand">
-      <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-        <rect width="56" height="56" rx="14" fill="url(#logo-grad)"/>
-        <circle cx="28" cy="28" r="14" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
-        <circle cx="28" cy="18" r="3.5" fill="#fff"/>
-        <circle cx="19" cy="33" r="3.5" fill="#fff"/>
-        <circle cx="37" cy="33" r="3.5" fill="#fff"/>
-        <line x1="28" y1="21.5" x2="21" y2="30" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
-        <line x1="28" y1="21.5" x2="35" y2="30" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
-        <line x1="22.5" y1="33" x2="33.5" y2="33" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
-        <circle cx="28" cy="28" r="2" fill="#fff" opacity="0.9"/>
-        <defs><linearGradient id="logo-grad" x1="0" y1="0" x2="56" y2="56"><stop stop-color="#6366f1"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs>
-      </svg>
+      <img src="/static/logo.png" alt="MeyREN Logo" class="brand-logo" onerror="this.style.display='none'">
       <h1>MeyREN</h1>
-      <p>v1.0</p>
+      <p>Secure VLESS Gateway</p>
     </div>
     <div class="error-msg" id="err-box"></div>
     <form id="login-form">
       <div class="form-group">
         <label data-en="Password" data-fa="رمز عبور">Password</label>
-        <input type="password" id="password" placeholder="Enter password" autofocus>
+        <input type="password" id="password" placeholder="Enter password" autofocus required>
       </div>
-      <button type="submit" class="login-btn" data-en="Sign In" data-fa="ورود">Sign In</button>
+      <button type="submit" class="login-btn" id="btn-submit" data-en="Sign In" data-fa="ورود">Sign In</button>
     </form>
   </div>
 </div>
@@ -86,11 +241,16 @@ function toggleTheme(){applyTheme(theme==='dark'?'light':'dark')}
 applyTheme(theme);setLang(lang);
 document.getElementById('login-form').addEventListener('submit',async e=>{
   e.preventDefault();const err=document.getElementById('err-box');err.classList.remove('show');
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true;btn.textContent=(lang==='fa'?'در حال ورود...':'Signing in...');
   try{
     const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});
     if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||'Failed');}
     location.href='/dashboard';
-  }catch(e){err.textContent=e.message;err.classList.add('show')}
+  }catch(e){
+    err.textContent=e.message;err.classList.add('show');
+    btn.disabled=false;btn.textContent=(lang==='fa'?'ورود':'Sign In');
+  }
 });
 </script>
 </body>

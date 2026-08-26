@@ -1,0 +1,18 @@
+{
+  "name": "MeyREN Gateway",
+  "short_name": "MeyREN",
+  "description": "High-Performance VLESS Proxy & Traffic Gateway",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#07070d",
+  "theme_color": "#07070d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

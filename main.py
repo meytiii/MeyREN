@@ -9,7 +9,7 @@ from datetime import datetime
 from collections import deque, defaultdict
 from urllib.parse import quote
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends
-from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -255,11 +255,76 @@ async def toggle_link(uid: str, request: Request, _=Depends(auth.require_auth)):
     return {"ok": True}
 
 
+@app.get("/manifest.json")
+async def get_manifest():
+    return FileResponse("static/manifest.json", media_type="application/manifest+json")
+
+
+@app.get("/sub")
+@app.get("/api/sub")
+async def get_subscription():
+    all_links = db.get_links()
+    active_links = [l for l in all_links if l.get("active", 1)]
+    domain = utils.get_domain()
+    raw_vless = []
+    total_used = 0
+    total_limit = 0
+    for l in active_links:
+        vless = utils.generate_vless_link(l["uuid"], domain, remark=f"MeyREN-{l.get('label', 'Link')}")
+        raw_vless.append(vless)
+        total_used += l.get("used_bytes", 0)
+        total_limit += l.get("limit_bytes", 0)
+
+    import base64
+    encoded = base64.b64encode("\n".join(raw_vless).encode("utf-8")).decode("utf-8")
+    headers = {
+        "Subscription-Userinfo": f"upload=0; download={total_used}; total={total_limit}; expire=0",
+        "Profile-Update-Interval": "12",
+        "Content-Disposition": 'attachment; filename="MeyREN-Sub.txt"',
+    }
+    return Response(content=encoded, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+@app.post("/api/links/restore")
+async def restore_links(request: Request, _=Depends(auth.require_auth)):
+    body = await request.json()
+    links = body.get("links") or []
+    count = 0
+    for l in links:
+        uid = str(l.get("uuid") or "")
+        label = str(l.get("label") or "Restored")[:60]
+        limit_bytes = int(l.get("limit_bytes") or 0)
+        used_bytes = int(l.get("used_bytes") or 0)
+        active = bool(l.get("active", True))
+        created_at = str(l.get("created_at") or datetime.now().isoformat())
+        if uid:
+            if db.get_link(uid):
+                db.update_link(uid, active=active, limit_bytes=limit_bytes, label=label)
+            else:
+                db.add_link(uid, label, limit_bytes, used_bytes, active, created_at)
+            count += 1
+    return {"ok": True, "count": count}
+
+
+@app.post("/api/links/{uid}/topup")
+async def topup_link(uid: str, request: Request, _=Depends(auth.require_auth)):
+    body = await request.json()
+    add_gb = float(body.get("gb") or 1.0)
+    add_bytes = int(add_gb * 1024 * 1024 * 1024)
+    link = db.get_link(uid)
+    if not link:
+        raise HTTPException(status_code=404, detail="link not found")
+    new_limit = max(0, link.get("limit_bytes", 0) + add_bytes)
+    db.update_link(uuid=uid, active=True, limit_bytes=new_limit)
+    return {"ok": True, "new_limit_bytes": new_limit}
+
+
 @app.delete("/api/links/{uid}")
 async def delete_link(uid: str, _=Depends(auth.require_auth)):
     db.delete_link(uid)
     await close_connections_for_link(uid)
     return {"ok": True}
+
 
 
 async def ws_to_tcp(websocket: WebSocket, writer: asyncio.StreamWriter, conn_id: str, link_uid: str):
