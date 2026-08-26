@@ -3,6 +3,8 @@ import hashlib
 import threading
 from collections import defaultdict
 
+import secrets
+
 DB_FILE = "meyren.db"
 
 _LINKS_CACHE: dict = {}
@@ -19,6 +21,38 @@ def _get_connection() -> sqlite3.Connection:
     return conn
 
 
+def hash_password(pw: str, secret_key: str) -> str:
+    return hashlib.sha256(f"{pw}{secret_key}".encode()).hexdigest()
+
+
+def get_or_create_secret_key(env_secret: str | None = None) -> str:
+    """Returns persistent secret key from env or DB settings, creating and saving one if missing."""
+    conn = _get_connection()
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)""")
+    
+    if env_secret and env_secret.strip():
+        secret = env_secret.strip()
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('secret_key', ?)", (secret,))
+        conn.commit()
+        conn.close()
+        return secret
+
+    c.execute("SELECT value FROM settings WHERE key='secret_key'")
+    row = c.fetchone()
+    if row and row[0]:
+        secret = row[0]
+        conn.close()
+        return secret
+
+    # Generate new persistent secret and store it
+    secret = secrets.token_urlsafe(32)
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('secret_key', ?)", (secret,))
+    conn.commit()
+    conn.close()
+    return secret
+
+
 def init_db(secret_key: str):
     conn = _get_connection()
     c = conn.cursor()
@@ -32,10 +66,12 @@ def init_db(secret_key: str):
         created_at TEXT
     )""")
     
+    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('secret_key', ?)", (secret_key,))
+
     c.execute("SELECT value FROM settings WHERE key='password_hash'")
     if not c.fetchone():
         admin_pw = "admin"
-        default_hash = hashlib.sha256(f"{admin_pw}{secret_key}".encode()).hexdigest()
+        default_hash = hash_password(admin_pw, secret_key)
         c.execute("INSERT INTO settings (key, value) VALUES ('password_hash', ?)", (default_hash,))
         
     conn.commit()
@@ -54,6 +90,15 @@ def init_db(secret_key: str):
             _LINKS_CACHE[row["uuid"]] = dict(row)
 
 
+def reset_admin_password(new_password: str = "admin", secret_key: str | None = None) -> str:
+    """Resets the admin password in DB and returns the new hash."""
+    if not secret_key:
+        secret_key = get_or_create_secret_key()
+    new_hash = hash_password(new_password, secret_key)
+    update_admin_password_hash(new_hash)
+    return new_hash
+
+
 def get_admin_password_hash() -> str:
     conn = _get_connection()
     c = conn.cursor()
@@ -61,6 +106,7 @@ def get_admin_password_hash() -> str:
     result = c.fetchone()
     conn.close()
     return result[0] if result else ""
+
 
 
 def update_admin_password_hash(new_hash: str):

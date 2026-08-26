@@ -26,9 +26,11 @@ logger = logging.getLogger("REN-Gateway")
 
 app = FastAPI(title="REN", docs_url=None, redoc_url=None)
 
+SECRET_KEY = db.get_or_create_secret_key(os.environ.get("SECRET_KEY"))
+
 CONFIG = {
     "port": int(os.environ.get("PORT", 8000)),
-    "secret": os.environ.get("SECRET_KEY", secrets.token_urlsafe(32)),
+    "secret": SECRET_KEY,
 }
 
 db.init_db(CONFIG["secret"])
@@ -54,7 +56,8 @@ RELAY_BUF = 32 * 1024  # 32KB buffer for optimal memory-to-throughput ratio
 
 
 def hash_password(pw: str) -> str:
-    return hashlib.sha256(f"{pw}{CONFIG['secret']}".encode()).hexdigest()
+    return db.hash_password(pw, CONFIG["secret"])
+
 
 
 async def keep_alive_task():
