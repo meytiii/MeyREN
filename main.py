@@ -1,15 +1,13 @@
 import asyncio
 import json
 import os
+import gc
 import hashlib
 import secrets
 import time
 from datetime import datetime
-import db
-import utils
-import auth
-from urllib.parse import quote
 from collections import deque, defaultdict
+from urllib.parse import quote
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import Response, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -18,6 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
 import psutil
+
+import db
+import utils
+import auth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("REN-Gateway")
@@ -48,8 +50,12 @@ stats = {"total_bytes": 0, "total_requests": 0, "total_errors": 0, "start_time":
 error_logs: deque = deque(maxlen=50)
 hourly_traffic: dict = defaultdict(int)
 
+RELAY_BUF = 32 * 1024  # 32KB buffer for optimal memory-to-throughput ratio
+
+
 def hash_password(pw: str) -> str:
     return hashlib.sha256(f"{pw}{CONFIG['secret']}".encode()).hexdigest()
+
 
 async def keep_alive_task():
     import urllib.request
@@ -62,16 +68,55 @@ async def keep_alive_task():
             except Exception as e:
                 logger.warning(f"Keepalive ping failed: {e}")
 
+
+async def background_maintenance_task():
+    """Flushes buffered DB usage, prunes expired sessions, and runs gentle memory GC."""
+    last_gc = time.time()
+    last_session_clean = time.time()
+    while True:
+        try:
+            await asyncio.sleep(2.0)
+            # Flush buffered usage to SQLite
+            await asyncio.to_thread(db.flush_usage_to_db)
+
+            now = time.time()
+            if now - last_session_clean > 300:
+                await auth.cleanup_expired_sessions()
+                last_session_clean = now
+
+            if now - last_gc > 60:
+                gc.collect()
+                last_gc = now
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.debug(f"Maintenance task error: {e}")
+
+
 @app.on_event("startup")
 async def startup():
+    # Initialize CPU measurement so subsequent calls with interval=None return immediately
+    psutil.cpu_percent(interval=None)
     logger.info(f"MeyREN started on port {CONFIG['port']}")
     asyncio.create_task(keep_alive_task())
+    asyncio.create_task(background_maintenance_task())
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    logger.info("MeyREN shutting down, flushing pending writes...")
+    try:
+        db.flush_usage_to_db()
+    except Exception:
+        pass
+
 
 async def ensure_default_link():
     links = db.get_links()
     if not links:
         uid = utils.generate_uuid(CONFIG["secret"], "default")
         db.add_link(uid, "Default", 0, 0, True, datetime.now().isoformat())
+
 
 async def close_connections_for_link(uid: str):
     to_close = [cid for cid, info in connections.items() if info.get("uuid") == uid]
@@ -85,13 +130,16 @@ async def close_connections_for_link(uid: str):
         connections.pop(cid, None)
         connection_sockets.pop(cid, None)
 
+
 @app.get("/")
 async def root():
     return {"service": "MeyREN", "version": "1.0", "status": "active", "domain": utils.get_domain()}
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "connections": len(connections), "uptime": utils.uptime(stats["start_time"])}
+
 
 @app.post("/api/login")
 async def api_login(request: Request):
@@ -104,6 +152,7 @@ async def api_login(request: Request):
     resp.set_cookie(key=auth.SESSION_COOKIE, value=token, max_age=auth.SESSION_TTL, httponly=True, samesite="lax", path="/")
     return resp
 
+
 @app.post("/api/logout")
 async def api_logout(request: Request):
     token = request.cookies.get(auth.SESSION_COOKIE)
@@ -112,10 +161,12 @@ async def api_logout(request: Request):
     resp.delete_cookie(auth.SESSION_COOKIE, path="/")
     return resp
 
+
 @app.get("/api/me")
 async def api_me(request: Request):
     token = request.cookies.get(auth.SESSION_COOKIE)
     return {"authenticated": await auth.is_valid_session(token)}
+
 
 @app.post("/api/change-password")
 async def api_change_password(request: Request, _=Depends(auth.require_auth)):
@@ -132,6 +183,7 @@ async def api_change_password(request: Request, _=Depends(auth.require_auth)):
     await auth.clear_other_sessions(current_token)
     return {"ok": True}
 
+
 @app.get("/stats")
 async def get_stats(_=Depends(auth.require_auth)):
     all_links = db.get_links()
@@ -145,10 +197,11 @@ async def get_stats(_=Depends(auth.require_auth)):
         "recent_errors": list(error_logs)[-10:],
         "links_count": len(all_links),
         "domain": utils.get_domain(),
-        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "cpu_percent": psutil.cpu_percent(interval=None),  # Non-blocking (0ms delay)
         "memory_percent": psutil.virtual_memory().percent,
         "hourly_traffic": dict(hourly_traffic),
     }
+
 
 @app.post("/api/links")
 async def create_link(request: Request, _=Depends(auth.require_auth)):
@@ -162,7 +215,16 @@ async def create_link(request: Request, _=Depends(auth.require_auth)):
     
     db.add_link(uid, label, limit_bytes, 0, True, created_at)
     
-    return {"uuid": uid, "label": label, "limit_bytes": limit_bytes, "used_bytes": 0, "active": True, "created_at": created_at, "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{label}")}
+    return {
+        "uuid": uid,
+        "label": label,
+        "limit_bytes": limit_bytes,
+        "used_bytes": 0,
+        "active": True,
+        "created_at": created_at,
+        "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{label}"),
+    }
+
 
 @app.get("/api/links")
 async def list_links(_=Depends(auth.require_auth)):
@@ -176,6 +238,7 @@ async def list_links(_=Depends(auth.require_auth)):
     result.sort(key=lambda x: x["created_at"], reverse=True)
     return {"links": result}
 
+
 @app.patch("/api/links/{uid}")
 async def toggle_link(uid: str, request: Request, _=Depends(auth.require_auth)):
     body = await request.json()
@@ -187,9 +250,10 @@ async def toggle_link(uid: str, request: Request, _=Depends(auth.require_auth)):
         active=body.get("active"),
         limit_bytes=utils.parse_size_to_bytes(float(body.get("limit_value", 0)), body.get("limit_unit", "GB")) if "limit_value" in body else None,
         reset_usage=body.get("reset_usage", False),
-        label=str(body["label"])[:60] if "label" in body else None
+        label=str(body["label"])[:60] if "label" in body else None,
     )
     return {"ok": True}
+
 
 @app.delete("/api/links/{uid}")
 async def delete_link(uid: str, _=Depends(auth.require_auth)):
@@ -197,54 +261,62 @@ async def delete_link(uid: str, _=Depends(auth.require_auth)):
     await close_connections_for_link(uid)
     return {"ok": True}
 
-RELAY_BUF = 64 * 1024
-
-async def check_quota(uid: str, extra_bytes: int) -> bool:
-    link = db.get_link(uid)
-    if link is None: return False
-    if not link["active"]: return False
-    if link["limit_bytes"] == 0: return True
-    return (link["used_bytes"] + extra_bytes) <= link["limit_bytes"]
-
-async def add_usage(uid: str, n: int):
-    db.add_usage(uid, n)
 
 async def ws_to_tcp(websocket: WebSocket, writer: asyncio.StreamWriter, conn_id: str, link_uid: str):
     try:
         while True:
             msg = await websocket.receive()
-            if msg["type"] == "websocket.disconnect": break
+            if msg["type"] == "websocket.disconnect":
+                break
             data = msg.get("bytes") or (msg.get("text") or "").encode()
-            if not data: continue
+            if not data:
+                continue
             size = len(data)
-            if not await check_quota(link_uid, size):
-                await websocket.close(code=1008, reason="quota exceeded"); break
-            stats["total_bytes"] += size; stats["total_requests"] += 1
-            connections[conn_id]["bytes"] += size
+            if not db.check_quota_fast(link_uid, size):
+                await websocket.close(code=1008, reason="quota exceeded")
+                break
+            stats["total_bytes"] += size
+            stats["total_requests"] += 1
+            if conn_id in connections:
+                connections[conn_id]["bytes"] += size
             hourly_traffic[datetime.now().strftime("%H:00")] += size
-            await add_usage(link_uid, size)
-            writer.write(data); await writer.drain()
-    except WebSocketDisconnect: pass
+            db.add_usage_buffered(link_uid, size)
+            writer.write(data)
+            await writer.drain()
+    except (WebSocketDisconnect, ConnectionResetError, BrokenPipeError):
+        pass
+    except Exception:
+        pass
     finally:
-        try: writer.write_eof()
-        except: pass
+        try:
+            writer.write_eof()
+        except Exception:
+            pass
+
 
 async def tcp_to_ws(websocket: WebSocket, reader: asyncio.StreamReader, conn_id: str, link_uid: str):
     first = True
     try:
         while True:
             data = await reader.read(RELAY_BUF)
-            if not data: break
+            if not data:
+                break
             size = len(data)
-            if not await check_quota(link_uid, size):
-                await websocket.close(code=1008, reason="quota exceeded"); break
+            if not db.check_quota_fast(link_uid, size):
+                await websocket.close(code=1008, reason="quota exceeded")
+                break
             stats["total_bytes"] += size
-            connections[conn_id]["bytes"] += size
+            if conn_id in connections:
+                connections[conn_id]["bytes"] += size
             hourly_traffic[datetime.now().strftime("%H:00")] += size
-            await add_usage(link_uid, size)
+            db.add_usage_buffered(link_uid, size)
             await websocket.send_bytes((b"\x00\x00" + data) if first else data)
             first = False
-    except: pass
+    except (WebSocketDisconnect, ConnectionResetError, BrokenPipeError):
+        pass
+    except Exception:
+        pass
+
 
 @app.websocket("/ws/{uuid}")
 async def websocket_tunnel(websocket: WebSocket, uuid: str):
@@ -255,39 +327,57 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
     connection_sockets[conn_id] = websocket
     writer = None
     try:
-        if not await check_quota(uuid, 0):
-            await websocket.close(code=1008, reason="quota exceeded or link deleted"); return
+        if not db.check_quota_fast(uuid, 0):
+            await websocket.close(code=1008, reason="quota exceeded or link deleted")
+            return
         first_msg = await asyncio.wait_for(websocket.receive(), timeout=15.0)
-        if first_msg["type"] == "websocket.disconnect": return
+        if first_msg["type"] == "websocket.disconnect":
+            return
         first_chunk = first_msg.get("bytes") or (first_msg.get("text") or "").encode()
-        if not first_chunk: return
+        if not first_chunk:
+            return
         command, address, port, initial_payload = await utils.parse_vless_header(first_chunk)
         size = len(first_chunk)
-        stats["total_bytes"] += size; stats["total_requests"] += 1
-        connections[conn_id]["bytes"] += size
+        stats["total_bytes"] += size
+        stats["total_requests"] += 1
+        if conn_id in connections:
+            connections[conn_id]["bytes"] += size
         hourly_traffic[datetime.now().strftime("%H:00")] += size
-        await add_usage(uuid, size)
+        db.add_usage_buffered(uuid, size)
+
         reader, writer = await asyncio.wait_for(asyncio.open_connection(address, port), timeout=10.0)
         if initial_payload:
             p_size = len(initial_payload)
             stats["total_bytes"] += p_size
-            connections[conn_id]["bytes"] += p_size
+            if conn_id in connections:
+                connections[conn_id]["bytes"] += p_size
             hourly_traffic[datetime.now().strftime("%H:00")] += p_size
-            await add_usage(uuid, p_size)
-            writer.write(initial_payload); await writer.drain()
+            db.add_usage_buffered(uuid, p_size)
+            writer.write(initial_payload)
+            await writer.drain()
+
         task_up = asyncio.create_task(ws_to_tcp(websocket, writer, conn_id, uuid))
         task_down = asyncio.create_task(tcp_to_ws(websocket, reader, conn_id, uuid))
         done, pending = await asyncio.wait({task_up, task_down}, return_when=asyncio.FIRST_COMPLETED)
-        for t in pending: t.cancel()
-    except WebSocketDisconnect: pass
+        for t in pending:
+            t.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+    except WebSocketDisconnect:
+        pass
     except Exception as exc:
         stats["total_errors"] += 1
         error_logs.append({"error": str(exc), "time": datetime.now().isoformat()})
     finally:
         if writer:
-            try: writer.close()
-            except: pass
+            try:
+                writer.close()
+                await asyncio.wait_for(writer.wait_closed(), timeout=2.0)
+            except Exception:
+                pass
+        # Cleanly remove from active tracking to prevent any memory leaks
         connections.pop(conn_id, None)
+        connection_sockets.pop(conn_id, None)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -297,6 +387,7 @@ async def login_page(request: Request):
         return RedirectResponse(url="/dashboard")
     return templates.TemplateResponse("login.html", {"request": request})
 
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
     token = request.cookies.get(auth.SESSION_COOKIE)
@@ -304,5 +395,6 @@ async def dashboard_page(request: Request):
         return RedirectResponse(url="/login")
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=CONFIG["port"])
+    uvicorn.run(app, host="0.0.0.0", port=CONFIG["port"])

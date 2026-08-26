@@ -9,26 +9,39 @@ SESSION_TTL = 60 * 60 * 24 * 7
 SESSIONS: dict = {}
 SESSIONS_LOCK = asyncio.Lock()
 
+
+def _prune_expired_locked(now: float):
+    expired = [t for t, exp in SESSIONS.items() if exp < now]
+    for t in expired:
+        SESSIONS.pop(t, None)
+
+
 async def create_session() -> str:
     token = secrets.token_urlsafe(32)
+    now = time.time()
     async with SESSIONS_LOCK:
-        SESSIONS[token] = time.time() + SESSION_TTL
+        _prune_expired_locked(now)
+        SESSIONS[token] = now + SESSION_TTL
     return token
+
 
 async def is_valid_session(token: str | None) -> bool:
     if not token:
         return False
+    now = time.time()
     async with SESSIONS_LOCK:
         exp = SESSIONS.get(token)
-        if exp is None or exp < time.time():
+        if exp is None or exp < now:
             SESSIONS.pop(token, None)
             return False
         return True
+
 
 async def destroy_session(token: str | None):
     if token:
         async with SESSIONS_LOCK:
             SESSIONS.pop(token, None)
+
 
 async def clear_other_sessions(current_token: str | None):
     async with SESSIONS_LOCK:
@@ -36,8 +49,15 @@ async def clear_other_sessions(current_token: str | None):
         if current_token:
             SESSIONS[current_token] = time.time() + SESSION_TTL
 
+
+async def cleanup_expired_sessions():
+    now = time.time()
+    async with SESSIONS_LOCK:
+        _prune_expired_locked(now)
+
+
 async def require_auth(request: Request):
     token = request.cookies.get(SESSION_COOKIE)
     if not await is_valid_session(token):
         raise HTTPException(status_code=401, detail="unauthorized")
-    return token
+    return token
