@@ -147,14 +147,13 @@ body[dir="rtl"]{
   max-height:32px !important;
   min-width:32px !important;
   min-height:32px !important;
-  border-radius:9px;
+  border-radius:50% !important;
   object-fit:cover;
   flex-shrink:0;
-  filter:drop-shadow(0 0 10px rgba(0,242,254,0.6));
-  transition:all .3s ease;
+  transition:transform .3s cubic-bezier(0.16,1,0.3,1), box-shadow .3s ease;
 }
 .brand-logo-img:hover{
-  filter:drop-shadow(0 0 16px rgba(168,85,247,0.8));
+  box-shadow:0 0 14px rgba(0,242,254,0.45);
   transform:scale(1.08) rotate(3deg);
 }
 .brand-logo-large{
@@ -162,7 +161,7 @@ body[dir="rtl"]{
   height:72px !important;
   max-width:72px !important;
   max-height:72px !important;
-  border-radius:20px;
+  border-radius:50% !important;
   object-fit:cover;
   filter:drop-shadow(0 0 20px rgba(0,242,254,0.5)) drop-shadow(0 0 35px rgba(168,85,247,0.4));
   margin-bottom:16px;
@@ -205,7 +204,7 @@ body[dir="rtl"] .sidebar{
   border-bottom:1px solid var(--border);
   min-height:60px;
 }
-.sidebar-brand-left{display:flex;align-items:center;gap:10px;overflow:hidden}
+.sidebar-brand-left{display:flex;align-items:center;gap:10px;overflow:visible}
 .sidebar-brand-left .brand-name{
   font-size:18px;
   font-weight:900;
