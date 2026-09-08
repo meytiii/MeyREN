@@ -226,9 +226,10 @@ body[dir="rtl"] .toolbar{right:auto;left:20px}
     </div>
     <div class="error-msg" id="err-box"></div>
     <form id="login-form">
+      <input type="text" name="username" value="admin" autocomplete="username" style="display:none;" tabindex="-1" aria-hidden="true">
       <div class="form-group">
         <label data-en="Password" data-fa="رمز عبور">Password</label>
-        <input type="password" id="password" placeholder="Enter password" autofocus required>
+        <input type="password" id="password" autocomplete="current-password" placeholder="Enter password" data-placeholder-en="Enter password" data-placeholder-fa="رمز عبور را وارد کنید" autofocus required>
       </div>
       <button type="submit" class="login-btn" id="btn-submit" data-en="Sign In" data-fa="ورود">Sign In</button>
     </form>
@@ -237,7 +238,14 @@ body[dir="rtl"] .toolbar{right:auto;left:20px}
 <script>
 let lang=localStorage.getItem('ren_lang')||'en';
 let theme=localStorage.getItem('ren_theme')||'dark';
-function setLang(l){lang=l;document.body.dir=l==='fa'?'rtl':'ltr';document.querySelectorAll('[data-en]').forEach(el=>{const v=el.getAttribute('data-'+l);if(v)el.textContent=v});document.getElementById('lang-toggle').textContent=l.toUpperCase();localStorage.setItem('ren_lang',l)}
+function setLang(l){
+  lang=l;
+  document.body.dir=l==='fa'?'rtl':'ltr';
+  document.querySelectorAll('[data-en]').forEach(el=>{const v=el.getAttribute('data-'+l);if(v)el.textContent=v});
+  document.querySelectorAll('[data-placeholder-en]').forEach(el=>{const p=el.getAttribute('data-placeholder-'+l);if(p)el.placeholder=p});
+  document.getElementById('lang-toggle').textContent=l.toUpperCase();
+  localStorage.setItem('ren_lang',l);
+}
 function cycleLang(){setLang(lang==='en'?'fa':'en')}
 function applyTheme(t){theme=t;document.documentElement.setAttribute('data-theme',t);localStorage.setItem('ren_theme',t)}
 function toggleTheme(){applyTheme(theme==='dark'?'light':'dark')}
@@ -248,7 +256,14 @@ document.getElementById('login-form').addEventListener('submit',async e=>{
   btn.disabled=true;btn.textContent=(lang==='fa'?'در حال ورود...':'Signing in...');
   try{
     const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});
-    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.detail||'Failed');}
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      let msg = d.detail || 'Failed';
+      if (msg === 'Invalid password') {
+        msg = lang === 'fa' ? 'رمز عبور نادرست است' : 'Invalid password';
+      }
+      throw new Error(msg);
+    }
     location.href='/dashboard';
   }catch(e){
     err.textContent=e.message;err.classList.add('show');

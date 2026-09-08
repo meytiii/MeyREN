@@ -216,9 +216,39 @@ function setLang(l) {
     const v = el.getAttribute('data-' + l);
     if (v) el.textContent = v;
   });
+  document.querySelectorAll('[data-placeholder-en]').forEach(el => {
+    const p = el.getAttribute('data-placeholder-' + l);
+    if (p) el.placeholder = p;
+  });
   localStorage.setItem('ren_lang', l);
   updateDomainSelects();
   renderDomainList();
+  updateQuotaPool();
+  filterInbounds();
+}
+
+function updateChartThemes() {
+  const isDark = (theme === 'dark');
+  const tickColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const doughnutBorder = isDark ? 'rgba(15, 16, 33, 0.8)' : 'rgba(255, 255, 255, 0.95)';
+
+  if (trafficChart) {
+    if (trafficChart.options.scales.x) trafficChart.options.scales.x.ticks.color = tickColor;
+    if (trafficChart.options.scales.y) {
+      trafficChart.options.scales.y.ticks.color = tickColor;
+      trafficChart.options.scales.y.grid.color = gridColor;
+    }
+    trafficChart.update('none');
+  }
+
+  if (consumersChart) {
+    consumersChart.data.datasets[0].borderColor = doughnutBorder;
+    if (consumersChart.data.labels && consumersChart.data.labels[0] === 'No traffic') {
+      consumersChart.data.datasets[0].backgroundColor = [isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'];
+    }
+    consumersChart.update('none');
+  }
 }
 
 function applyTheme(t) {
@@ -231,6 +261,7 @@ function applyTheme(t) {
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
       : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
   }
+  updateChartThemes();
 }
 
 function toggleTheme() {
@@ -260,7 +291,7 @@ function fmtBytes(b) {
 }
 
 function fmtLimit(b) {
-  if (b === 0) return 'Unlimited';
+  if (b === 0) return lang === 'fa' ? 'نامحدود' : 'Unlimited';
   const gb = b / 1073741824;
   return (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) + ' GB';
 }
@@ -298,15 +329,15 @@ async function loadStats() {
     if (lastTimestamp > 0 && now > lastTimestamp && currentBytes >= lastTotalBytes) {
       const dt = (now - lastTimestamp) / 1000;
       const speed = (currentBytes - lastTotalBytes) / dt;
-      $('#s-speed').textContent = fmtSpeed(speed);
+      $('#s-speed').innerHTML = `<bdi>${fmtSpeed(speed)}</bdi>`;
     }
     lastTotalBytes = currentBytes;
     lastTimestamp = now;
 
-    $('#s-traffic').innerHTML = statsData.total_traffic_mb + '<span class="stat-unit"> MB</span>';
-    $('#s-links').textContent = statsData.links_count;
-    $('#s-uptime').textContent = statsData.uptime;
-    $('#s-domain').textContent = statsData.domain;
+    $('#s-traffic').innerHTML = `<bdi>${statsData.total_traffic_mb} MB</bdi>`;
+    $('#s-links').innerHTML = `<bdi>${statsData.links_count}</bdi>`;
+    $('#s-uptime').innerHTML = `<bdi>${statsData.uptime}</bdi>`;
+    $('#s-domain').innerHTML = `<bdi>${statsData.domain}</bdi>`;
     if (statsData.domains && Array.isArray(statsData.domains)) {
       let changed = false;
       statsData.domains.forEach(d => {
@@ -322,14 +353,14 @@ async function loadStats() {
     $('#links-badge').textContent = statsData.links_count;
     $('#last-update').textContent = (lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ') + new Date().toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
 
-    if ($('#t-traffic')) $('#t-traffic').textContent = statsData.total_traffic_mb + ' MB';
-    if ($('#t-reqs')) $('#t-reqs').textContent = (statsData.total_requests || 0).toLocaleString();
-    if ($('#t-uptime')) $('#t-uptime').textContent = statsData.uptime;
+    if ($('#t-traffic')) $('#t-traffic').innerHTML = `<bdi>${statsData.total_traffic_mb} MB</bdi>`;
+    if ($('#t-reqs')) $('#t-reqs').innerHTML = `<bdi>${(statsData.total_requests || 0).toLocaleString()}</bdi>`;
+    if ($('#t-uptime')) $('#t-uptime').innerHTML = `<bdi>${statsData.uptime}</bdi>`;
 
     if (statsData.cpu_percent !== undefined) {
       const c = statsData.cpu_percent;
       const cc = c > 80 ? 'var(--red)' : c > 50 ? 'var(--yellow)' : 'var(--neon-blue)';
-      $('#s-cpu-val').textContent = c.toFixed(1) + '%';
+      $('#s-cpu-val').innerHTML = `<bdi>${c.toFixed(1)}%</bdi>`;
       $('#s-cpu-val').style.color = cc;
       $('#s-cpu-bar').style.width = c + '%';
       $('#s-cpu-bar').style.background = cc;
@@ -337,7 +368,7 @@ async function loadStats() {
     if (statsData.memory_percent !== undefined) {
       const m = statsData.memory_percent;
       const mc = m > 80 ? 'var(--red)' : m > 50 ? 'var(--yellow)' : 'var(--green)';
-      $('#s-mem-val').textContent = m.toFixed(1) + '%';
+      $('#s-mem-val').innerHTML = `<bdi>${m.toFixed(1)}%</bdi>`;
       $('#s-mem-val').style.color = mc;
       $('#s-mem-bar').style.width = m + '%';
       $('#s-mem-bar').style.background = mc;
@@ -367,12 +398,15 @@ function updateQuotaPool() {
   });
 
   const usedGB = (totalUsed / (1024 * 1024 * 1024)).toFixed(2);
-  const limitGB = totalLimit > 0 ? (totalLimit / (1024 * 1024 * 1024)).toFixed(1) + ' GB' : 'Unlimited';
+  const limitGB = totalLimit > 0 ? (totalLimit / (1024 * 1024 * 1024)).toFixed(1) + ' GB' : (lang === 'fa' ? 'نامحدود' : 'Unlimited');
   const pct = totalLimit > 0 ? Math.min(100, (totalUsed / totalLimit) * 100) : 0;
 
   const textEl = $('#quota-pool-text');
   const barEl = $('#quota-pool-bar');
-  if (textEl) textEl.textContent = `${usedGB} GB / ${limitGB} (${allLinks.length} Users)`;
+  if (textEl) {
+    const userWord = lang === 'fa' ? 'کاربر' : 'Users';
+    textEl.innerHTML = `<bdi>${usedGB} GB / ${limitGB}</bdi> <span style="font-size:11px;opacity:0.85">(${allLinks.length} ${userWord})</span>`;
+  }
   if (barEl) barEl.style.width = pct + '%';
 }
 
@@ -416,17 +450,17 @@ function renderLinks(links) {
       dPill.title = 'Domain: ' + linkDomain;
       if (linkDomain === defaultDomain) dPill.classList.add('tag-domain-default');
     }
-    row.querySelector('.col-used').textContent = uF;
-    row.querySelector('.col-limit').textContent = lF;
+    row.querySelector('.col-used').innerHTML = `<bdi>${uF}</bdi>`;
+    row.querySelector('.col-limit').innerHTML = `<bdi>${lF}</bdi>`;
     row.querySelector('.col-fill').style.width = pct + '%';
     row.querySelector('.col-fill').style.background = col;
 
     const rStatus = row.querySelector('.col-status');
     if (isCapped) {
-      rStatus.textContent = 'Capped';
+      rStatus.textContent = lang === 'fa' ? 'اتمام حجم' : 'Capped';
       rStatus.className = 'col-status tag tag-warning';
     } else {
-      rStatus.textContent = l.active ? 'Active' : 'Disabled';
+      rStatus.textContent = l.active ? (lang === 'fa' ? 'فعال' : 'Active') : (lang === 'fa' ? 'غیرفعال' : 'Disabled');
       rStatus.className = 'col-status tag ' + (l.active ? 'tag-active' : 'tag-disabled');
     }
 
@@ -454,8 +488,8 @@ function renderLinks(links) {
       cDPill.title = 'Domain: ' + linkDomain;
       if (linkDomain === defaultDomain) cDPill.classList.add('tag-domain-default');
     }
-    card.querySelector('.col-used').textContent = uF;
-    card.querySelector('.col-limit').textContent = lF;
+    card.querySelector('.col-used').innerHTML = `<bdi>${uF}</bdi>`;
+    card.querySelector('.col-limit').innerHTML = `<bdi>${lF}</bdi>`;
     card.querySelector('.col-fill').style.width = pct + '%';
     card.querySelector('.col-fill').style.background = col;
 
@@ -491,17 +525,17 @@ function showDetail(uid) {
 
   $('#detail-title').textContent = l.label;
   const stat = $('#det-status');
-  stat.textContent = l.active ? 'Active' : 'Disabled';
+  stat.textContent = l.active ? (lang === 'fa' ? 'فعال' : 'Active') : (lang === 'fa' ? 'غیرفعال' : 'Disabled');
   stat.className = 'tag ' + (l.active ? 'tag-active' : 'tag-disabled');
-  $('#det-uuid').textContent = l.uuid;
-  if ($('#det-domain')) $('#det-domain').textContent = linkDomain;
-  $('#det-used').textContent = uF;
-  $('#det-limit').textContent = lF;
-  $('#det-pct').textContent = pct.toFixed(1) + '%';
+  $('#det-uuid').innerHTML = `<bdi>${l.uuid}</bdi>`;
+  if ($('#det-domain')) $('#det-domain').innerHTML = `<bdi>${linkDomain}</bdi>`;
+  $('#det-used').innerHTML = `<bdi>${uF}</bdi>`;
+  $('#det-limit').innerHTML = `<bdi>${lF}</bdi>`;
+  $('#det-pct').innerHTML = `<bdi>${pct.toFixed(1)}%</bdi>`;
   $('#det-bar').style.width = pct + '%';
   $('#det-bar').style.background = col;
-  $('#det-created').textContent = created;
-  $('#det-link').textContent = l.vless_link;
+  $('#det-created').innerHTML = `<bdi>${created}</bdi>`;
+  $('#det-link').innerHTML = `<bdi>${l.vless_link}</bdi>`;
 
   $('#det-act-copy').onclick = function() { copyLinkText(l.vless_link, this); };
   $('#det-act-qr').onclick = function() { showQRText(l.vless_link, l.label); $('#detail-modal').close(); };
@@ -816,6 +850,10 @@ async function changePassword() {
 function initHourlyChart() {
   const ctx = document.getElementById('trafficChart');
   if (!ctx) return;
+  const isDark = (theme === 'dark');
+  const tickColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+
   trafficChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -835,8 +873,8 @@ function initHourlyChart() {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 }, callback: v => v + ' MB' }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 }, callback: v => v + ' MB' }, beginAtZero: true }
       }
     }
   });
@@ -856,6 +894,9 @@ function updateHourlyChart() {
 function initConsumersChart() {
   const ctx = document.getElementById('consumersChart');
   if (!ctx) return;
+  const isDark = (theme === 'dark');
+  const borderColor = isDark ? 'rgba(15, 16, 33, 0.8)' : 'rgba(255, 255, 255, 0.95)';
+
   consumersChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -864,7 +905,7 @@ function initConsumersChart() {
         data: [],
         backgroundColor: ['#00f2fe', '#38bdf8', '#818cf8', '#a855f7', '#d946ef'],
         borderWidth: 2,
-        borderColor: 'rgba(15, 16, 33, 0.8)'
+        borderColor: borderColor
       }]
     },
     options: {
@@ -883,13 +924,14 @@ function updateConsumersChart() {
   const sorted = [...allLinks].filter(l => (l.used_bytes || 0) > 0).sort((a, b) => b.used_bytes - a.used_bytes).slice(0, 5);
   const listEl = $('#top-consumers-list');
   const countEl = $('#top-consumers-count');
+  const isDark = (theme === 'dark');
 
   if (!sorted.length) {
     consumersChart.data.labels = ['No traffic'];
     consumersChart.data.datasets[0].data = [1];
-    consumersChart.data.datasets[0].backgroundColor = ['rgba(255,255,255,0.1)'];
+    consumersChart.data.datasets[0].backgroundColor = [isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'];
     consumersChart.update();
-    if (listEl) listEl.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px">No traffic data yet</div>';
+    if (listEl) listEl.innerHTML = `<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px" data-en="No traffic data yet" data-fa="هنوز داده‌ای ثبت نشده است">${lang === 'fa' ? 'هنوز داده‌ای ثبت نشده است' : 'No traffic data yet'}</div>`;
     return;
   }
 
@@ -902,7 +944,7 @@ function updateConsumersChart() {
   consumersChart.data.datasets[0].backgroundColor = colors.slice(0, sorted.length);
   consumersChart.update();
 
-  if (countEl) countEl.textContent = `Top ${sorted.length}`;
+  if (countEl) countEl.textContent = lang === 'fa' ? `${sorted.length} کاربر برتر` : `Top ${sorted.length}`;
 
   if (listEl) {
     listEl.innerHTML = sorted.map((l, i) => `
@@ -911,7 +953,7 @@ function updateConsumersChart() {
           <span style="width:8px;height:8px;border-radius:50%;background:${colors[i]};flex-shrink:0"></span>
           <span style="font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">${l.label}</span>
         </div>
-        <span style="color:var(--text2);font-weight:600">${fmtBytes(l.used_bytes)}</span>
+        <span class="bidi-safe" style="color:var(--text2);font-weight:600"><bdi>${fmtBytes(l.used_bytes)}</bdi></span>
       </div>
     `).join('');
   }
@@ -952,6 +994,10 @@ $('#btn-backup-json')?.addEventListener('click', backupJson);
 $('#btn-restore-json')?.addEventListener('click', () => $('#restore-modal').showModal());
 $('#btn-do-restore')?.addEventListener('click', doRestore);
 
+$('#security-form')?.addEventListener('submit', (e) => { e.preventDefault(); changePassword(); });
+$('#add-inbound-form')?.addEventListener('submit', (e) => { e.preventDefault(); createLink(); });
+$('#edit-inbound-form')?.addEventListener('submit', (e) => { e.preventDefault(); saveEdit(); });
+
 $('#btn-create-link')?.addEventListener('click', createLink);
 $('#btn-save-edit')?.addEventListener('click', saveEdit);
 $('#btn-update-pw')?.addEventListener('click', changePassword);
@@ -962,6 +1008,47 @@ $('#sub-modal-close')?.addEventListener('click', () => $('#sub-modal').close());
 $('#detail-modal-close')?.addEventListener('click', () => $('#detail-modal').close());
 $('#qr-modal-close')?.addEventListener('click', () => $('#qr-modal').close());
 $('#restore-modal-close')?.addEventListener('click', () => $('#restore-modal').close());
+
+// Backdrop click closes dialog
+$$('.modal-dialog').forEach(dlg => {
+  dlg.addEventListener('click', e => {
+    const rect = dlg.getBoundingClientRect();
+    const isInDialog = (
+      rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX && e.clientX <= rect.left + rect.width
+    );
+    if (!isInDialog) dlg.close();
+  });
+});
+
+// File upload dropzone handler
+const restoreDropzone = $('#restore-dropzone');
+const restoreFileInput = $('#restore-file-input');
+const restoreFileName = $('#restore-file-name');
+
+if (restoreDropzone && restoreFileInput) {
+  restoreDropzone.addEventListener('click', () => restoreFileInput.click());
+  restoreFileInput.addEventListener('change', () => {
+    if (restoreFileInput.files && restoreFileInput.files[0]) {
+      restoreFileName.textContent = restoreFileInput.files[0].name;
+    }
+  });
+  restoreDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    restoreDropzone.style.borderColor = 'var(--neon-blue)';
+  });
+  restoreDropzone.addEventListener('dragleave', () => {
+    restoreDropzone.style.borderColor = '';
+  });
+  restoreDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    restoreDropzone.style.borderColor = '';
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      restoreFileInput.files = e.dataTransfer.files;
+      restoreFileName.textContent = e.dataTransfer.files[0].name;
+    }
+  });
+}
 
 function openDomainsModal() {
   renderDomainList();
