@@ -101,6 +101,7 @@ html[data-theme="light"]{
 
 html,body{
   height:100%;
+  width:100%;
   overflow-x:hidden;
   max-width:100vw;
 }
@@ -111,6 +112,7 @@ body{
   background-attachment:fixed;
   color:var(--text);
   min-height:100vh;
+  width:100%;
   display:flex;
   transition:background-color .3s cubic-bezier(0.16,1,0.3,1),color .3s;
 }
@@ -126,7 +128,7 @@ body[dir="rtl"]{
   outline:2px solid var(--neon-blue);
   outline-offset:2px;
 }
-.bidi-safe, bdi, [dir="ltr"]{
+.bidi-safe, bdi, span[dir="ltr"], code[dir="ltr"], pre[dir="ltr"], mark[dir="ltr"]{
   direction:ltr !important;
   unicode-bidi:isolate !important;
   display:inline-block;
@@ -352,10 +354,13 @@ body[dir="rtl"] .nav-badge{margin-left:0;margin-right:auto}
 /* Main Area */
 .main{
   margin-left:230px;
-  flex:1;
+  flex:1 1 auto;
+  width:calc(100% - 230px);
+  min-width:0;
   padding:28px 36px 64px;
   min-height:100vh;
-  transition:margin .3s;
+  box-sizing:border-box;
+  transition:margin .3s, width .3s;
 }
 body[dir="rtl"] .main{
   margin-left:0;
@@ -1118,7 +1123,7 @@ body[dir="rtl"] .search-box svg{left:auto;right:12px}
     padding-top:68px;
     padding-left:16px;
     padding-right:16px;
-    width:100%;
+    width:100% !important;
     max-width:100vw;
     box-sizing:border-box;
     overflow-x:hidden;

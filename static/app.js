@@ -1,6 +1,7 @@
-let lang = localStorage.getItem('ren_lang') || 'en';
+let lang = localStorage.getItem('ren_lang') || 'fa';
 let theme = localStorage.getItem('ren_theme') || 'dark';
 let isCompact = localStorage.getItem('ren_compact') === 'true';
+let lastStatsTime = null;
 
 let allLinks = [];
 let allDomains = [];
@@ -207,6 +208,18 @@ async function setDefaultDomain(domain) {
   }
 }
 
+function updateLastUpdateDisplay() {
+  const el = $('#last-update');
+  if (!el) return;
+  if (!lastStatsTime) {
+    el.textContent = lang === 'fa' ? 'بروزرسانی: --' : 'Updated: --';
+    return;
+  }
+  const timeStr = lastStatsTime.toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
+  const label = lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ';
+  el.innerHTML = `${label}<bdi class="bidi-safe">${timeStr}</bdi>`;
+}
+
 function setLang(l) {
   lang = l;
   document.getElementById('lang-en').classList.toggle('active', l === 'en');
@@ -221,10 +234,12 @@ function setLang(l) {
     if (p) el.placeholder = p;
   });
   localStorage.setItem('ren_lang', l);
+  updateLastUpdateDisplay();
   updateDomainSelects();
   renderDomainList();
   updateQuotaPool();
   filterInbounds();
+  updateConsumersChart();
 }
 
 function updateChartThemes() {
@@ -351,7 +366,8 @@ async function loadStats() {
       if ($('#domains-modal-count')) $('#domains-modal-count').textContent = allDomains.length;
     }
     $('#links-badge').textContent = statsData.links_count;
-    $('#last-update').textContent = (lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ') + new Date().toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
+    lastStatsTime = new Date();
+    updateLastUpdateDisplay();
 
     if ($('#t-traffic')) $('#t-traffic').innerHTML = `<bdi>${statsData.total_traffic_mb} MB</bdi>`;
     if ($('#t-reqs')) $('#t-reqs').innerHTML = `<bdi>${(statsData.total_requests || 0).toLocaleString()}</bdi>`;
