@@ -8,6 +8,8 @@ __pycache__/
 
 #hallmark
 /.hallmark/cache/*
+/.hallmark/*
+design.md
 
 # Playwright audit screenshots & trace logs
 /.playwright-mcp/*
