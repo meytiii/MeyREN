@@ -188,8 +188,9 @@ async def api_change_password(request: Request, _=Depends(auth.require_auth)):
 
 
 @app.get("/stats")
-async def get_stats(_=Depends(auth.require_auth)):
+async def get_stats(request: Request, _=Depends(auth.require_auth)):
     all_links = db.get_links()
+    req_host = request.headers.get("host")
     return {
         "active_connections": len(connections),
         "total_traffic_mb": round(stats["total_bytes"] / (1024 * 1024), 2),
@@ -200,9 +201,61 @@ async def get_stats(_=Depends(auth.require_auth)):
         "recent_errors": list(error_logs)[-10:],
         "links_count": len(all_links),
         "domain": utils.get_domain(),
+        "domains": utils.get_all_domains(request_host=req_host),
         "cpu_percent": psutil.cpu_percent(interval=None),  # Non-blocking (0ms delay)
         "memory_percent": psutil.virtual_memory().percent,
         "hourly_traffic": dict(hourly_traffic),
+    }
+
+
+@app.get("/api/domains")
+async def list_domains(request: Request, _=Depends(auth.require_auth)):
+    req_host = request.headers.get("host")
+    return {
+        "default": utils.get_default_domain(),
+        "domains": utils.get_all_domains(request_host=req_host),
+    }
+
+
+@app.post("/api/domains")
+async def add_domain_endpoint(request: Request, _=Depends(auth.require_auth)):
+    body = await request.json()
+    raw_d = str(body.get("domain") or "").strip()
+    cleaned = utils.clean_domain(raw_d)
+    if not cleaned or len(cleaned) < 3 or ("." not in cleaned and cleaned != "localhost"):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+    db.add_custom_domain(cleaned)
+    req_host = request.headers.get("host")
+    return {
+        "ok": True,
+        "default": utils.get_default_domain(),
+        "domains": utils.get_all_domains(request_host=req_host),
+    }
+
+
+@app.delete("/api/domains/{domain}")
+async def delete_domain_endpoint(domain: str, request: Request, _=Depends(auth.require_auth)):
+    cleaned = utils.clean_domain(domain)
+    db.delete_custom_domain(cleaned)
+    req_host = request.headers.get("host")
+    return {
+        "ok": True,
+        "default": utils.get_default_domain(),
+        "domains": utils.get_all_domains(request_host=req_host),
+    }
+
+
+@app.post("/api/domains/default")
+async def set_default_domain_endpoint(request: Request, _=Depends(auth.require_auth)):
+    body = await request.json()
+    raw_d = str(body.get("domain") or "").strip()
+    cleaned = utils.clean_domain(raw_d)
+    db.set_default_domain_setting(cleaned)
+    req_host = request.headers.get("host")
+    return {
+        "ok": True,
+        "default": utils.get_default_domain(),
+        "domains": utils.get_all_domains(request_host=req_host),
     }
 
 
@@ -213,10 +266,13 @@ async def create_link(request: Request, _=Depends(auth.require_auth)):
     limit_value = float(body.get("limit_value") or 0)
     limit_unit = body.get("limit_unit") or "GB"
     limit_bytes = 0 if limit_value <= 0 else utils.parse_size_to_bytes(limit_value, limit_unit)
+    domain = utils.clean_domain(str(body.get("domain") or ""))
+    if not domain:
+        domain = utils.get_default_domain()
     uid = utils.generate_uuid(CONFIG["secret"], label)
     created_at = datetime.now().isoformat()
     
-    db.add_link(uid, label, limit_bytes, 0, True, created_at)
+    db.add_link(uid, label, limit_bytes, 0, True, created_at, domain=domain)
     
     return {
         "uuid": uid,
@@ -225,17 +281,21 @@ async def create_link(request: Request, _=Depends(auth.require_auth)):
         "used_bytes": 0,
         "active": True,
         "created_at": created_at,
-        "vless_link": utils.generate_vless_link(uid, utils.get_domain(), remark=f"MeyREN-{label}"),
+        "domain": domain,
+        "vless_link": utils.generate_vless_link(uid, domain, remark=f"MeyREN-{label}"),
     }
 
 
 @app.get("/api/links")
 async def list_links(_=Depends(auth.require_auth)):
     all_links = db.get_links()
+    default_domain = utils.get_default_domain()
     result = []
     for data in all_links:
-        data["active"] = bool(data["active"]) 
-        data["vless_link"] = utils.generate_vless_link(data["uuid"], utils.get_domain(), remark=f"MeyREN-{data['label']}")
+        data["active"] = bool(data["active"])
+        link_domain = data.get("domain") or default_domain
+        data["domain"] = link_domain
+        data["vless_link"] = utils.generate_vless_link(data["uuid"], link_domain, remark=f"MeyREN-{data['label']}")
         result.append(data)
     
     result.sort(key=lambda x: x["created_at"], reverse=True)
@@ -248,12 +308,18 @@ async def toggle_link(uid: str, request: Request, _=Depends(auth.require_auth)):
     if not db.get_link(uid):
         raise HTTPException(status_code=404, detail="link not found")
         
+    domain_val = None
+    if "domain" in body:
+        cleaned_d = utils.clean_domain(str(body.get("domain") or ""))
+        domain_val = cleaned_d if cleaned_d else utils.get_default_domain()
+
     db.update_link(
         uuid=uid,
         active=body.get("active"),
         limit_bytes=utils.parse_size_to_bytes(float(body.get("limit_value", 0)), body.get("limit_unit", "GB")) if "limit_value" in body else None,
         reset_usage=body.get("reset_usage", False),
         label=str(body["label"])[:60] if "label" in body else None,
+        domain=domain_val,
     )
     return {"ok": True}
 
@@ -265,15 +331,17 @@ async def get_manifest():
 
 @app.get("/sub")
 @app.get("/api/sub")
-async def get_subscription():
+async def get_subscription(request: Request, domain: str = None):
     all_links = db.get_links()
     active_links = [l for l in all_links if l.get("active", 1)]
-    domain = utils.get_domain()
+    override_domain = utils.clean_domain(domain) if domain else ""
+    default_domain = utils.get_default_domain()
     raw_vless = []
     total_used = 0
     total_limit = 0
     for l in active_links:
-        vless = utils.generate_vless_link(l["uuid"], domain, remark=f"MeyREN-{l.get('label', 'Link')}")
+        effective_domain = override_domain or l.get("domain") or default_domain
+        vless = utils.generate_vless_link(l["uuid"], effective_domain, remark=f"MeyREN-{l.get('label', 'Link')}")
         raw_vless.append(vless)
         total_used += l.get("used_bytes", 0)
         total_limit += l.get("limit_bytes", 0)
@@ -292,6 +360,7 @@ async def get_subscription():
 async def restore_links(request: Request, _=Depends(auth.require_auth)):
     body = await request.json()
     links = body.get("links") or []
+    default_domain = utils.get_default_domain()
     count = 0
     for l in links:
         uid = str(l.get("uuid") or "")
@@ -300,11 +369,12 @@ async def restore_links(request: Request, _=Depends(auth.require_auth)):
         used_bytes = int(l.get("used_bytes") or 0)
         active = bool(l.get("active", True))
         created_at = str(l.get("created_at") or datetime.now().isoformat())
+        domain = utils.clean_domain(str(l.get("domain") or "")) or default_domain
         if uid:
             if db.get_link(uid):
-                db.update_link(uid, active=active, limit_bytes=limit_bytes, label=label)
+                db.update_link(uid, active=active, limit_bytes=limit_bytes, label=label, domain=domain)
             else:
-                db.add_link(uid, label, limit_bytes, used_bytes, active, created_at)
+                db.add_link(uid, label, limit_bytes, used_bytes, active, created_at, domain=domain)
             count += 1
     return {"ok": True, "count": count}
 

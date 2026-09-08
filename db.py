@@ -53,6 +53,71 @@ def get_or_create_secret_key(env_secret: str | None = None) -> str:
     return secret
 
 
+import json
+
+def get_custom_domains() -> list:
+    conn = _get_connection()
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key='custom_domains'")
+    row = c.fetchone()
+    conn.close()
+    if row and row[0]:
+        try:
+            return json.loads(row[0])
+        except Exception:
+            return []
+    return []
+
+
+def add_custom_domain(domain: str) -> list:
+    domain = domain.strip()
+    if not domain:
+        return get_custom_domains()
+    domains = get_custom_domains()
+    if domain not in domains:
+        domains.append(domain)
+        conn = _get_connection()
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('custom_domains', ?)", (json.dumps(domains),))
+        conn.commit()
+        conn.close()
+    return domains
+
+
+def delete_custom_domain(domain: str) -> list:
+    domain = domain.strip()
+    domains = get_custom_domains()
+    if domain in domains:
+        domains.remove(domain)
+        conn = _get_connection()
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('custom_domains', ?)", (json.dumps(domains),))
+        conn.commit()
+        conn.close()
+    return domains
+
+
+def get_default_domain_setting() -> str | None:
+    conn = _get_connection()
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key='default_domain'")
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row and row[0] else None
+
+
+def set_default_domain_setting(domain: str):
+    domain = domain.strip()
+    conn = _get_connection()
+    c = conn.cursor()
+    if domain:
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('default_domain', ?)", (domain,))
+    else:
+        c.execute("DELETE FROM settings WHERE key='default_domain'")
+    conn.commit()
+    conn.close()
+
+
 def init_db(secret_key: str):
     conn = _get_connection()
     c = conn.cursor()
@@ -63,8 +128,13 @@ def init_db(secret_key: str):
         limit_bytes INTEGER,
         used_bytes INTEGER,
         active INTEGER,
-        created_at TEXT
+        created_at TEXT,
+        domain TEXT DEFAULT ''
     )""")
+    try:
+        c.execute("ALTER TABLE links ADD COLUMN domain TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
     
     c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('secret_key', ?)", (secret_key,))
 
@@ -87,7 +157,9 @@ def init_db(secret_key: str):
         _LINKS_CACHE.clear()
         _PENDING_USAGE.clear()
         for row in rows:
-            _LINKS_CACHE[row["uuid"]] = dict(row)
+            d_row = dict(row)
+            d_row.setdefault("domain", "")
+            _LINKS_CACHE[row["uuid"]] = d_row
 
 
 def reset_admin_password(new_password: str = "admin", secret_key: str | None = None) -> str:
@@ -117,12 +189,12 @@ def update_admin_password_hash(new_hash: str):
     conn.close()
 
 
-def add_link(uuid: str, label: str, limit_bytes: int, used_bytes: int, active: bool, created_at: str):
+def add_link(uuid: str, label: str, limit_bytes: int, used_bytes: int, active: bool, created_at: str, domain: str = ""):
     conn = _get_connection()
     c = conn.cursor()
     c.execute(
-        "INSERT INTO links (uuid, label, limit_bytes, used_bytes, active, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (uuid, label, limit_bytes, used_bytes, int(active), created_at),
+        "INSERT INTO links (uuid, label, limit_bytes, used_bytes, active, created_at, domain) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (uuid, label, limit_bytes, used_bytes, int(active), created_at, domain or ""),
     )
     conn.commit()
     conn.close()
@@ -135,6 +207,7 @@ def add_link(uuid: str, label: str, limit_bytes: int, used_bytes: int, active: b
             "used_bytes": used_bytes,
             "active": int(active),
             "created_at": created_at,
+            "domain": domain or "",
         }
 
 
@@ -200,7 +273,7 @@ def flush_usage_to_db():
         raise e
 
 
-def update_link(uuid: str, active: bool = None, limit_bytes: int = None, reset_usage: bool = False, label: str = None):
+def update_link(uuid: str, active: bool = None, limit_bytes: int = None, reset_usage: bool = False, label: str = None, domain: str = None):
     if reset_usage:
         with _CACHE_LOCK:
             _PENDING_USAGE.pop(uuid, None)
@@ -215,6 +288,8 @@ def update_link(uuid: str, active: bool = None, limit_bytes: int = None, reset_u
         c.execute("UPDATE links SET used_bytes=0 WHERE uuid=?", (uuid,))
     if label is not None:
         c.execute("UPDATE links SET label=? WHERE uuid=?", (label, uuid))
+    if domain is not None:
+        c.execute("UPDATE links SET domain=? WHERE uuid=?", (domain, uuid))
     conn.commit()
     conn.close()
 
@@ -229,6 +304,8 @@ def update_link(uuid: str, active: bool = None, limit_bytes: int = None, reset_u
                 link["used_bytes"] = 0
             if label is not None:
                 link["label"] = label
+            if domain is not None:
+                link["domain"] = domain
 
 
 def delete_link(uuid: str):
