@@ -1,8 +1,11 @@
-let lang = localStorage.getItem('ren_lang') || 'en';
+let lang = localStorage.getItem('ren_lang') || 'fa';
 let theme = localStorage.getItem('ren_theme') || 'dark';
 let isCompact = localStorage.getItem('ren_compact') === 'true';
+let lastStatsTime = null;
 
 let allLinks = [];
+let allDomains = [];
+let defaultDomain = '';
 let currentFilter = 'all';
 let statsData = {};
 let trafficChart = null;
@@ -14,6 +17,209 @@ let lastTimestamp = 0;
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
+async function loadDomains() {
+  try {
+    const r = await fetch('/api/domains');
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    defaultDomain = d.default || location.hostname || 'localhost';
+    allDomains = d.domains && d.domains.length ? d.domains : [defaultDomain];
+
+    const curHost = location.host;
+    if (curHost && !allDomains.includes(curHost) && curHost !== '127.0.0.1' && curHost !== 'localhost' && !curHost.startsWith('127.')) {
+      allDomains.push(curHost);
+    }
+
+    updateDomainSelects();
+    renderDomainList();
+    if ($('#s-domain-count')) $('#s-domain-count').textContent = allDomains.length;
+    if ($('#domains-modal-count')) $('#domains-modal-count').textContent = allDomains.length;
+  } catch (e) {
+    if (!allDomains.length) {
+      allDomains = [location.hostname || 'localhost'];
+      defaultDomain = allDomains[0];
+      updateDomainSelects();
+    }
+  }
+}
+
+function updateDomainSelects() {
+  const newDomainSel = $('#new-domain');
+  const editDomainSel = $('#edit-domain');
+  const subDomainSel = $('#sub-domain-select');
+
+  const domainOptions = allDomains.map(d => {
+    const isDef = d === defaultDomain;
+    const label = d + (isDef ? (lang === 'fa' ? ' (پیش‌فرض)' : ' (Default)') : '');
+    return `<option value="${d}">${label}</option>`;
+  }).join('');
+
+  if (newDomainSel) {
+    const curVal = newDomainSel.value;
+    newDomainSel.innerHTML = domainOptions;
+    if (curVal && allDomains.includes(curVal)) newDomainSel.value = curVal;
+    else if (defaultDomain) newDomainSel.value = defaultDomain;
+  }
+
+  if (editDomainSel) {
+    const curVal = editDomainSel.value;
+    editDomainSel.innerHTML = domainOptions;
+    if (curVal && allDomains.includes(curVal)) editDomainSel.value = curVal;
+    else if (defaultDomain) editDomainSel.value = defaultDomain;
+  }
+
+  if (subDomainSel) {
+    const curVal = subDomainSel.value;
+    const assignedOpt = `<option value="assigned">${lang === 'fa' ? 'دامنه‌های متصل به هر کانفیگ' : 'Config Assigned Domains (Per-Config)'}</option>`;
+    subDomainSel.innerHTML = assignedOpt + domainOptions;
+    if (curVal && (curVal === 'assigned' || allDomains.includes(curVal))) {
+      subDomainSel.value = curVal;
+    } else {
+      subDomainSel.value = defaultDomain || 'assigned';
+    }
+    updateSubUrl();
+  }
+}
+
+function updateSubUrl() {
+  const subSel = $('#sub-domain-select');
+  const selVal = subSel ? subSel.value : 'assigned';
+  let subUrl = '';
+  if (!selVal || selVal === 'assigned') {
+    subUrl = location.origin + '/sub';
+  } else {
+    const proto = location.protocol || 'https:';
+    subUrl = `${proto}//${selVal}/sub?domain=${encodeURIComponent(selVal)}`;
+  }
+  if ($('#sub-url-box')) $('#sub-url-box').textContent = subUrl;
+  return subUrl;
+}
+
+function renderDomainList() {
+  const container = $('#domain-list-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!allDomains.length) {
+    container.innerHTML = `<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">${lang === 'fa' ? 'هیچ دامنه‌ای یافت نشد' : 'No domains configured'}</div>`;
+    return;
+  }
+
+  allDomains.forEach(d => {
+    const isDef = d === defaultDomain;
+    const item = document.createElement('div');
+    item.className = 'domain-item';
+
+    let badgeClass = 'badge-custom';
+    let badgeText = lang === 'fa' ? 'اختصاصی' : 'CUSTOM';
+    if (isDef) {
+      badgeClass = 'badge-default';
+      badgeText = lang === 'fa' ? 'پیش‌فرض' : 'DEFAULT';
+    } else if (d.includes('railway') || d.includes('onrender')) {
+      badgeClass = 'badge-env';
+      badgeText = 'HOST';
+    }
+
+    item.innerHTML = `
+      <div class="domain-item-info">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--neon-blue);flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span class="domain-item-name" title="${d}">${d}</span>
+        <span class="domain-item-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="domain-item-actions">
+        ${!isDef ? `<button class="btn-domain-action btn-set-default" data-domain="${d}" title="Set as default">${lang === 'fa' ? 'تنظیم پیش‌فرض' : 'Make Default'}</button>` : ''}
+        ${!isDef ? `<button class="btn-domain-action btn-domain-delete" data-domain="${d}" title="Delete">&#x2715;</button>` : ''}
+      </div>
+    `;
+
+    const setDefaultBtn = item.querySelector('.btn-set-default');
+    if (setDefaultBtn) {
+      setDefaultBtn.onclick = () => setDefaultDomain(d);
+    }
+    const delBtn = item.querySelector('.btn-domain-delete');
+    if (delBtn) {
+      delBtn.onclick = () => deleteDomain(d);
+    }
+
+    container.appendChild(item);
+  });
+}
+
+async function addCustomDomain() {
+  const input = $('#new-custom-domain-input');
+  if (!input) return;
+  const raw = input.value.trim();
+  if (!raw) {
+    toast(lang === 'fa' ? 'لطفاً نام دامنه را وارد کنید' : 'Please enter domain name', true);
+    return;
+  }
+  try {
+    const r = await fetch('/api/domains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: raw })
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Error adding domain');
+    }
+    input.value = '';
+    toast(lang === 'fa' ? 'دامنه با موفقیت اضافه شد' : 'Domain added successfully');
+    await loadDomains();
+    if ($('#add-modal')?.open && $('#new-domain')) {
+      $('#new-domain').value = raw;
+    }
+    if ($('#edit-modal')?.open && $('#edit-domain')) {
+      $('#edit-domain').value = raw;
+    }
+    await loadStats();
+  } catch (e) {
+    toast(e.message || (lang === 'fa' ? 'خطا در افزودن دامنه' : 'Error adding domain'), true);
+  }
+}
+
+async function deleteDomain(domain) {
+  if (!confirm(lang === 'fa' ? `آیا از حذف دامنه ${domain} مطمئن هستید؟` : `Are you sure you want to delete domain ${domain}?`)) return;
+  try {
+    const r = await fetch(`/api/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error();
+    toast(lang === 'fa' ? 'دامنه حذف شد' : 'Domain deleted');
+    await loadDomains();
+    await loadStats();
+  } catch (e) {
+    toast(lang === 'fa' ? 'خطا در حذف دامنه' : 'Error deleting domain', true);
+  }
+}
+
+async function setDefaultDomain(domain) {
+  try {
+    const r = await fetch('/api/domains/default', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain })
+    });
+    if (!r.ok) throw new Error();
+    toast(lang === 'fa' ? `دامنه پیش‌فرض به ${domain} تغییر کرد` : `Default domain set to ${domain}`);
+    await loadDomains();
+    await loadLinks();
+    await loadStats();
+  } catch (e) {
+    toast(lang === 'fa' ? 'خطا در تعیین دامنه پیش‌فرض' : 'Error setting default domain', true);
+  }
+}
+
+function updateLastUpdateDisplay() {
+  const el = $('#last-update');
+  if (!el) return;
+  if (!lastStatsTime) {
+    el.textContent = lang === 'fa' ? 'بروزرسانی: --' : 'Updated: --';
+    return;
+  }
+  const timeStr = lastStatsTime.toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
+  const label = lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ';
+  el.innerHTML = `${label}<bdi class="bidi-safe">${timeStr}</bdi>`;
+}
+
 function setLang(l) {
   lang = l;
   document.getElementById('lang-en').classList.toggle('active', l === 'en');
@@ -23,7 +229,41 @@ function setLang(l) {
     const v = el.getAttribute('data-' + l);
     if (v) el.textContent = v;
   });
+  document.querySelectorAll('[data-placeholder-en]').forEach(el => {
+    const p = el.getAttribute('data-placeholder-' + l);
+    if (p) el.placeholder = p;
+  });
   localStorage.setItem('ren_lang', l);
+  updateLastUpdateDisplay();
+  updateDomainSelects();
+  renderDomainList();
+  updateQuotaPool();
+  filterInbounds();
+  updateConsumersChart();
+}
+
+function updateChartThemes() {
+  const isDark = (theme === 'dark');
+  const tickColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const doughnutBorder = isDark ? 'rgba(15, 16, 33, 0.8)' : 'rgba(255, 255, 255, 0.95)';
+
+  if (trafficChart) {
+    if (trafficChart.options.scales.x) trafficChart.options.scales.x.ticks.color = tickColor;
+    if (trafficChart.options.scales.y) {
+      trafficChart.options.scales.y.ticks.color = tickColor;
+      trafficChart.options.scales.y.grid.color = gridColor;
+    }
+    trafficChart.update('none');
+  }
+
+  if (consumersChart) {
+    consumersChart.data.datasets[0].borderColor = doughnutBorder;
+    if (consumersChart.data.labels && consumersChart.data.labels[0] === 'No traffic') {
+      consumersChart.data.datasets[0].backgroundColor = [isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'];
+    }
+    consumersChart.update('none');
+  }
 }
 
 function applyTheme(t) {
@@ -36,6 +276,7 @@ function applyTheme(t) {
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
       : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
   }
+  updateChartThemes();
 }
 
 function toggleTheme() {
@@ -65,7 +306,7 @@ function fmtBytes(b) {
 }
 
 function fmtLimit(b) {
-  if (b === 0) return 'Unlimited';
+  if (b === 0) return lang === 'fa' ? 'نامحدود' : 'Unlimited';
   const gb = b / 1073741824;
   return (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) + ' GB';
 }
@@ -103,26 +344,39 @@ async function loadStats() {
     if (lastTimestamp > 0 && now > lastTimestamp && currentBytes >= lastTotalBytes) {
       const dt = (now - lastTimestamp) / 1000;
       const speed = (currentBytes - lastTotalBytes) / dt;
-      $('#s-speed').textContent = fmtSpeed(speed);
+      $('#s-speed').innerHTML = `<bdi>${fmtSpeed(speed)}</bdi>`;
     }
     lastTotalBytes = currentBytes;
     lastTimestamp = now;
 
-    $('#s-traffic').innerHTML = statsData.total_traffic_mb + '<span class="stat-unit"> MB</span>';
-    $('#s-links').textContent = statsData.links_count;
-    $('#s-uptime').textContent = statsData.uptime;
-    $('#s-domain').textContent = statsData.domain;
+    $('#s-traffic').innerHTML = `<bdi>${statsData.total_traffic_mb} MB</bdi>`;
+    $('#s-links').innerHTML = `<bdi>${statsData.links_count}</bdi>`;
+    $('#s-uptime').innerHTML = `<bdi>${statsData.uptime}</bdi>`;
+    $('#s-domain').innerHTML = `<bdi>${statsData.domain}</bdi>`;
+    if (statsData.domains && Array.isArray(statsData.domains)) {
+      let changed = false;
+      statsData.domains.forEach(d => {
+        if (!allDomains.includes(d)) {
+          allDomains.push(d);
+          changed = true;
+        }
+      });
+      if (changed) updateDomainSelects();
+      if ($('#s-domain-count')) $('#s-domain-count').textContent = allDomains.length;
+      if ($('#domains-modal-count')) $('#domains-modal-count').textContent = allDomains.length;
+    }
     $('#links-badge').textContent = statsData.links_count;
-    $('#last-update').textContent = (lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ') + new Date().toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
+    lastStatsTime = new Date();
+    updateLastUpdateDisplay();
 
-    if ($('#t-traffic')) $('#t-traffic').textContent = statsData.total_traffic_mb + ' MB';
-    if ($('#t-reqs')) $('#t-reqs').textContent = (statsData.total_requests || 0).toLocaleString();
-    if ($('#t-uptime')) $('#t-uptime').textContent = statsData.uptime;
+    if ($('#t-traffic')) $('#t-traffic').innerHTML = `<bdi>${statsData.total_traffic_mb} MB</bdi>`;
+    if ($('#t-reqs')) $('#t-reqs').innerHTML = `<bdi>${(statsData.total_requests || 0).toLocaleString()}</bdi>`;
+    if ($('#t-uptime')) $('#t-uptime').innerHTML = `<bdi>${statsData.uptime}</bdi>`;
 
     if (statsData.cpu_percent !== undefined) {
       const c = statsData.cpu_percent;
       const cc = c > 80 ? 'var(--red)' : c > 50 ? 'var(--yellow)' : 'var(--neon-blue)';
-      $('#s-cpu-val').textContent = c.toFixed(1) + '%';
+      $('#s-cpu-val').innerHTML = `<bdi>${c.toFixed(1)}%</bdi>`;
       $('#s-cpu-val').style.color = cc;
       $('#s-cpu-bar').style.width = c + '%';
       $('#s-cpu-bar').style.background = cc;
@@ -130,7 +384,7 @@ async function loadStats() {
     if (statsData.memory_percent !== undefined) {
       const m = statsData.memory_percent;
       const mc = m > 80 ? 'var(--red)' : m > 50 ? 'var(--yellow)' : 'var(--green)';
-      $('#s-mem-val').textContent = m.toFixed(1) + '%';
+      $('#s-mem-val').innerHTML = `<bdi>${m.toFixed(1)}%</bdi>`;
       $('#s-mem-val').style.color = mc;
       $('#s-mem-bar').style.width = m + '%';
       $('#s-mem-bar').style.background = mc;
@@ -160,12 +414,15 @@ function updateQuotaPool() {
   });
 
   const usedGB = (totalUsed / (1024 * 1024 * 1024)).toFixed(2);
-  const limitGB = totalLimit > 0 ? (totalLimit / (1024 * 1024 * 1024)).toFixed(1) + ' GB' : 'Unlimited';
+  const limitGB = totalLimit > 0 ? (totalLimit / (1024 * 1024 * 1024)).toFixed(1) + ' GB' : (lang === 'fa' ? 'نامحدود' : 'Unlimited');
   const pct = totalLimit > 0 ? Math.min(100, (totalUsed / totalLimit) * 100) : 0;
 
   const textEl = $('#quota-pool-text');
   const barEl = $('#quota-pool-bar');
-  if (textEl) textEl.textContent = `${usedGB} GB / ${limitGB} (${allLinks.length} Users)`;
+  if (textEl) {
+    const userWord = lang === 'fa' ? 'کاربر' : 'Users';
+    textEl.innerHTML = `<bdi>${usedGB} GB / ${limitGB}</bdi> <span style="font-size:11px;opacity:0.85">(${allLinks.length} ${userWord})</span>`;
+  }
   if (barEl) barEl.style.width = pct + '%';
 }
 
@@ -202,17 +459,24 @@ function renderLinks(links) {
     const row = document.importNode(rowTpl, true);
     row.querySelector('.col-id').textContent = i;
     row.querySelector('.col-name').textContent = l.label;
-    row.querySelector('.col-used').textContent = uF;
-    row.querySelector('.col-limit').textContent = lF;
+    const dPill = row.querySelector('.col-domain-pill');
+    if (dPill) {
+      const linkDomain = l.domain || defaultDomain || location.host;
+      dPill.textContent = linkDomain;
+      dPill.title = 'Domain: ' + linkDomain;
+      if (linkDomain === defaultDomain) dPill.classList.add('tag-domain-default');
+    }
+    row.querySelector('.col-used').innerHTML = `<bdi>${uF}</bdi>`;
+    row.querySelector('.col-limit').innerHTML = `<bdi>${lF}</bdi>`;
     row.querySelector('.col-fill').style.width = pct + '%';
     row.querySelector('.col-fill').style.background = col;
 
     const rStatus = row.querySelector('.col-status');
     if (isCapped) {
-      rStatus.textContent = 'Capped';
+      rStatus.textContent = lang === 'fa' ? 'اتمام حجم' : 'Capped';
       rStatus.className = 'col-status tag tag-warning';
     } else {
-      rStatus.textContent = l.active ? 'Active' : 'Disabled';
+      rStatus.textContent = l.active ? (lang === 'fa' ? 'فعال' : 'Active') : (lang === 'fa' ? 'غیرفعال' : 'Disabled');
       rStatus.className = 'col-status tag ' + (l.active ? 'tag-active' : 'tag-disabled');
     }
 
@@ -233,8 +497,15 @@ function renderLinks(links) {
     const card = document.importNode(cardTpl, true);
     card.querySelector('.col-id').textContent = '#' + i;
     card.querySelector('.col-name').textContent = l.label;
-    card.querySelector('.col-used').textContent = uF;
-    card.querySelector('.col-limit').textContent = lF;
+    const cDPill = card.querySelector('.col-domain-pill');
+    if (cDPill) {
+      const linkDomain = l.domain || defaultDomain || location.host;
+      cDPill.textContent = linkDomain;
+      cDPill.title = 'Domain: ' + linkDomain;
+      if (linkDomain === defaultDomain) cDPill.classList.add('tag-domain-default');
+    }
+    card.querySelector('.col-used').innerHTML = `<bdi>${uF}</bdi>`;
+    card.querySelector('.col-limit').innerHTML = `<bdi>${lF}</bdi>`;
     card.querySelector('.col-fill').style.width = pct + '%';
     card.querySelector('.col-fill').style.background = col;
 
@@ -266,19 +537,21 @@ function showDetail(uid) {
   const pct = lim > 0 ? Math.min(100, (u / lim) * 100) : 0;
   const col = pct > 90 ? 'var(--red)' : pct > 70 ? 'var(--yellow)' : 'var(--neon-blue)';
   const created = l.created_at ? new Date(l.created_at).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US') : '--';
+  const linkDomain = l.domain || defaultDomain || location.host;
 
   $('#detail-title').textContent = l.label;
   const stat = $('#det-status');
-  stat.textContent = l.active ? 'Active' : 'Disabled';
+  stat.textContent = l.active ? (lang === 'fa' ? 'فعال' : 'Active') : (lang === 'fa' ? 'غیرفعال' : 'Disabled');
   stat.className = 'tag ' + (l.active ? 'tag-active' : 'tag-disabled');
-  $('#det-uuid').textContent = l.uuid;
-  $('#det-used').textContent = uF;
-  $('#det-limit').textContent = lF;
-  $('#det-pct').textContent = pct.toFixed(1) + '%';
+  $('#det-uuid').innerHTML = `<bdi>${l.uuid}</bdi>`;
+  if ($('#det-domain')) $('#det-domain').innerHTML = `<bdi>${linkDomain}</bdi>`;
+  $('#det-used').innerHTML = `<bdi>${uF}</bdi>`;
+  $('#det-limit').innerHTML = `<bdi>${lF}</bdi>`;
+  $('#det-pct').innerHTML = `<bdi>${pct.toFixed(1)}%</bdi>`;
   $('#det-bar').style.width = pct + '%';
   $('#det-bar').style.background = col;
-  $('#det-created').textContent = created;
-  $('#det-link').textContent = l.vless_link;
+  $('#det-created').innerHTML = `<bdi>${created}</bdi>`;
+  $('#det-link').innerHTML = `<bdi>${l.vless_link}</bdi>`;
 
   $('#det-act-copy').onclick = function() { copyLinkText(l.vless_link, this); };
   $('#det-act-qr').onclick = function() { showQRText(l.vless_link, l.label); $('#detail-modal').close(); };
@@ -312,7 +585,7 @@ async function quickCreate(limit, unit) {
     const r = await fetch('/api/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: name, limit_value: limit, limit_unit: unit })
+      body: JSON.stringify({ label: name, limit_value: limit, limit_unit: unit, domain: defaultDomain })
     });
     if (!r.ok) throw new Error();
     toast('Created: ' + name);
@@ -327,6 +600,7 @@ async function createLink() {
   const label = $('#new-label').value.trim() || 'New Link';
   const val = parseFloat($('#new-limit').value) || 0;
   const unit = $('#new-unit').value || 'GB';
+  const domain = $('#new-domain')?.value || defaultDomain;
   if (!/^[a-zA-Z0-9\-_. ]+$/.test(label)) {
     toast('Only English letters and numbers allowed in remark', true);
     return;
@@ -335,7 +609,7 @@ async function createLink() {
     const r = await fetch('/api/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, limit_value: val, limit_unit: unit })
+      body: JSON.stringify({ label, limit_value: val, limit_unit: unit, domain })
     });
     if (!r.ok) throw new Error();
     toast('Created successfully');
@@ -355,6 +629,14 @@ function openEditModal(l) {
   const gb = (l.limit_bytes || 0) / (1024 * 1024 * 1024);
   $('#edit-limit').value = gb > 0 ? (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) : 0;
   $('#edit-reset-usage').checked = false;
+  if ($('#edit-domain')) {
+    const linkDomain = l.domain || defaultDomain;
+    if (linkDomain && !allDomains.includes(linkDomain)) {
+      allDomains.push(linkDomain);
+      updateDomainSelects();
+    }
+    $('#edit-domain').value = linkDomain;
+  }
   $('#edit-modal').showModal();
 }
 
@@ -363,6 +645,7 @@ async function saveEdit() {
   const label = $('#edit-label').value.trim() || 'Link';
   const limitVal = parseFloat($('#edit-limit').value) || 0;
   const resetUsage = $('#edit-reset-usage').checked;
+  const domain = $('#edit-domain')?.value || defaultDomain;
 
   try {
     const r = await fetch(`/api/links/${uid}`, {
@@ -372,7 +655,8 @@ async function saveEdit() {
         label,
         limit_value: limitVal,
         limit_unit: 'GB',
-        reset_usage: resetUsage
+        reset_usage: resetUsage,
+        domain
       })
     });
     if (!r.ok) throw new Error();
@@ -451,9 +735,33 @@ function downloadQR() {
 }
 
 function openSubModal() {
-  const subUrl = location.origin + '/sub';
-  $('#sub-url-box').textContent = subUrl;
+  updateDomainSelects();
+  updateSubUrl();
   $('#sub-modal').showModal();
+}
+
+async function downloadSubTxt() {
+  const subSel = $('#sub-domain-select');
+  const selVal = subSel ? subSel.value : 'assigned';
+  let url = '/sub';
+  if (selVal && selVal !== 'assigned') {
+    url = `/sub?domain=${encodeURIComponent(selVal)}`;
+  }
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error();
+    const txtBase64 = await r.text();
+    const rawTxt = atob(txtBase64.trim());
+    const blob = new Blob([rawTxt], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `MeyREN-Sub-${selVal || 'all'}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(lang === 'fa' ? 'فایل اشتراک دانلود شد' : 'Subscription downloaded');
+  } catch (e) {
+    toast(lang === 'fa' ? 'خطا در دانلود اشتراک' : 'Error downloading subscription', true);
+  }
 }
 
 function exportTxt() {
@@ -558,6 +866,10 @@ async function changePassword() {
 function initHourlyChart() {
   const ctx = document.getElementById('trafficChart');
   if (!ctx) return;
+  const isDark = (theme === 'dark');
+  const tickColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.55)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+
   trafficChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -577,8 +889,8 @@ function initHourlyChart() {
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,0.06)' }, ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 }, callback: v => v + ' MB' }, beginAtZero: true }
+        x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 10 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 }, callback: v => v + ' MB' }, beginAtZero: true }
       }
     }
   });
@@ -598,6 +910,9 @@ function updateHourlyChart() {
 function initConsumersChart() {
   const ctx = document.getElementById('consumersChart');
   if (!ctx) return;
+  const isDark = (theme === 'dark');
+  const borderColor = isDark ? 'rgba(15, 16, 33, 0.8)' : 'rgba(255, 255, 255, 0.95)';
+
   consumersChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -606,7 +921,7 @@ function initConsumersChart() {
         data: [],
         backgroundColor: ['#00f2fe', '#38bdf8', '#818cf8', '#a855f7', '#d946ef'],
         borderWidth: 2,
-        borderColor: 'rgba(15, 16, 33, 0.8)'
+        borderColor: borderColor
       }]
     },
     options: {
@@ -625,13 +940,14 @@ function updateConsumersChart() {
   const sorted = [...allLinks].filter(l => (l.used_bytes || 0) > 0).sort((a, b) => b.used_bytes - a.used_bytes).slice(0, 5);
   const listEl = $('#top-consumers-list');
   const countEl = $('#top-consumers-count');
+  const isDark = (theme === 'dark');
 
   if (!sorted.length) {
     consumersChart.data.labels = ['No traffic'];
     consumersChart.data.datasets[0].data = [1];
-    consumersChart.data.datasets[0].backgroundColor = ['rgba(255,255,255,0.1)'];
+    consumersChart.data.datasets[0].backgroundColor = [isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'];
     consumersChart.update();
-    if (listEl) listEl.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px">No traffic data yet</div>';
+    if (listEl) listEl.innerHTML = `<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px" data-en="No traffic data yet" data-fa="هنوز داده‌ای ثبت نشده است">${lang === 'fa' ? 'هنوز داده‌ای ثبت نشده است' : 'No traffic data yet'}</div>`;
     return;
   }
 
@@ -644,7 +960,7 @@ function updateConsumersChart() {
   consumersChart.data.datasets[0].backgroundColor = colors.slice(0, sorted.length);
   consumersChart.update();
 
-  if (countEl) countEl.textContent = `Top ${sorted.length}`;
+  if (countEl) countEl.textContent = lang === 'fa' ? `${sorted.length} کاربر برتر` : `Top ${sorted.length}`;
 
   if (listEl) {
     listEl.innerHTML = sorted.map((l, i) => `
@@ -653,7 +969,7 @@ function updateConsumersChart() {
           <span style="width:8px;height:8px;border-radius:50%;background:${colors[i]};flex-shrink:0"></span>
           <span style="font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">${l.label}</span>
         </div>
-        <span style="color:var(--text2);font-weight:600">${fmtBytes(l.used_bytes)}</span>
+        <span class="bidi-safe" style="color:var(--text2);font-weight:600"><bdi>${fmtBytes(l.used_bytes)}</bdi></span>
       </div>
     `).join('');
   }
@@ -694,6 +1010,10 @@ $('#btn-backup-json')?.addEventListener('click', backupJson);
 $('#btn-restore-json')?.addEventListener('click', () => $('#restore-modal').showModal());
 $('#btn-do-restore')?.addEventListener('click', doRestore);
 
+$('#security-form')?.addEventListener('submit', (e) => { e.preventDefault(); changePassword(); });
+$('#add-inbound-form')?.addEventListener('submit', (e) => { e.preventDefault(); createLink(); });
+$('#edit-inbound-form')?.addEventListener('submit', (e) => { e.preventDefault(); saveEdit(); });
+
 $('#btn-create-link')?.addEventListener('click', createLink);
 $('#btn-save-edit')?.addEventListener('click', saveEdit);
 $('#btn-update-pw')?.addEventListener('click', changePassword);
@@ -705,11 +1025,67 @@ $('#detail-modal-close')?.addEventListener('click', () => $('#detail-modal').clo
 $('#qr-modal-close')?.addEventListener('click', () => $('#qr-modal').close());
 $('#restore-modal-close')?.addEventListener('click', () => $('#restore-modal').close());
 
+// Backdrop click closes dialog
+$$('.modal-dialog').forEach(dlg => {
+  dlg.addEventListener('click', e => {
+    const rect = dlg.getBoundingClientRect();
+    const isInDialog = (
+      rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX && e.clientX <= rect.left + rect.width
+    );
+    if (!isInDialog) dlg.close();
+  });
+});
+
+// File upload dropzone handler
+const restoreDropzone = $('#restore-dropzone');
+const restoreFileInput = $('#restore-file-input');
+const restoreFileName = $('#restore-file-name');
+
+if (restoreDropzone && restoreFileInput) {
+  restoreDropzone.addEventListener('click', () => restoreFileInput.click());
+  restoreFileInput.addEventListener('change', () => {
+    if (restoreFileInput.files && restoreFileInput.files[0]) {
+      restoreFileName.textContent = restoreFileInput.files[0].name;
+    }
+  });
+  restoreDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    restoreDropzone.style.borderColor = 'var(--neon-blue)';
+  });
+  restoreDropzone.addEventListener('dragleave', () => {
+    restoreDropzone.style.borderColor = '';
+  });
+  restoreDropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    restoreDropzone.style.borderColor = '';
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      restoreFileInput.files = e.dataTransfer.files;
+      restoreFileName.textContent = e.dataTransfer.files[0].name;
+    }
+  });
+}
+
+function openDomainsModal() {
+  renderDomainList();
+  $('#domains-modal').showModal();
+}
+
+$('#btn-domains-modal')?.addEventListener('click', openDomainsModal);
+$('#stat-domain-card')?.addEventListener('click', openDomainsModal);
+$('#btn-add-modal-manage-domains')?.addEventListener('click', openDomainsModal);
+$('#btn-edit-modal-manage-domains')?.addEventListener('click', openDomainsModal);
+$('#btn-sub-modal-manage-domains')?.addEventListener('click', openDomainsModal);
+$('#domains-modal-close')?.addEventListener('click', () => $('#domains-modal').close());
+$('#btn-add-custom-domain')?.addEventListener('click', addCustomDomain);
+$('#new-custom-domain-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCustomDomain(); });
+$('#sub-domain-select')?.addEventListener('change', updateSubUrl);
+
 $('#btn-download-qr')?.addEventListener('click', downloadQR);
 $('#btn-close-qr')?.addEventListener('click', () => $('#qr-modal').close());
 $('#btn-copy-sub')?.addEventListener('click', function() { copyLinkText($('#sub-url-box').textContent, this); });
 $('#btn-qr-sub')?.addEventListener('click', () => showQRText($('#sub-url-box').textContent, 'Subscription QR'));
-$('#btn-open-sub-txt')?.addEventListener('click', exportTxt);
+$('#btn-open-sub-txt')?.addEventListener('click', downloadSubTxt);
 
 // Initialize
 applyTheme(theme);
@@ -723,6 +1099,7 @@ if (isCompact) {
 initHourlyChart();
 initConsumersChart();
 
+loadDomains();
 loadStats();
 loadLinks();
 setInterval(loadStats, 10000);
