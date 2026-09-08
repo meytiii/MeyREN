@@ -5,81 +5,8 @@ import time
 import re
 from urllib.parse import quote
 
-def clean_domain(domain_str: str) -> str:
-    if not domain_str:
-        return ""
-    d = domain_str.strip()
-    d = re.sub(r"^https?://", "", d, flags=re.IGNORECASE)
-    d = d.split("/")[0].split("?")[0].strip()
-    return d.strip(" :")
-
-def get_default_domain() -> str:
-    import db
-    try:
-        custom_default = db.get_default_domain_setting()
-        if custom_default:
-            return clean_domain(custom_default)
-    except Exception:
-        pass
-
-    raw_env = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-    if raw_env:
-        return clean_domain(raw_env)
-
-    env_domains = [d.strip() for d in re.split(r"[,;\s]+", os.environ.get("DOMAINS", os.environ.get("CUSTOM_DOMAINS", ""))) if d.strip()]
-    if env_domains:
-        return clean_domain(env_domains[0])
-
-    return "localhost"
-
 def get_domain() -> str:
-    return get_default_domain()
-
-def get_all_domains(request_host: str | None = None) -> list[str]:
-    import db
-    seen = set()
-    result = []
-
-    def add_d(d: str):
-        cleaned = clean_domain(d)
-        if cleaned and cleaned not in seen:
-            seen.add(cleaned)
-            result.append(cleaned)
-
-    # 1. Default domain first
-    default_d = get_default_domain()
-    if default_d:
-        add_d(default_d)
-
-    # 2. Env vars
-    for env_key in ("RENDER_EXTERNAL_URL", "RAILWAY_PUBLIC_DOMAIN"):
-        val = os.environ.get(env_key)
-        if val:
-            add_d(val)
-
-    env_domains_str = os.environ.get("DOMAINS", os.environ.get("CUSTOM_DOMAINS", ""))
-    for d in re.split(r"[,;\s]+", env_domains_str):
-        if d.strip():
-            add_d(d)
-
-    # 3. DB custom domains
-    try:
-        for d in db.get_custom_domains():
-            add_d(d)
-    except Exception:
-        pass
-
-    # 4. Request host if valid
-    if request_host:
-        h = clean_domain(request_host)
-        if h and h not in ("0.0.0.0", "testserver"):
-            add_d(h)
-
-    if not result:
-        result.append("localhost")
-
-    return result
-
+    return os.environ.get("RENDER_EXTERNAL_URL", os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost")).replace("https://", "").replace("http://", "")
 
 def generate_uuid(secret_key: str, seed: str | None = None) -> str:
     if seed is None:

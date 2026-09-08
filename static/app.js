@@ -3,8 +3,6 @@ let theme = localStorage.getItem('ren_theme') || 'dark';
 let isCompact = localStorage.getItem('ren_compact') === 'true';
 
 let allLinks = [];
-let allDomains = [];
-let defaultDomain = '';
 let currentFilter = 'all';
 let statsData = {};
 let trafficChart = null;
@@ -16,197 +14,6 @@ let lastTimestamp = 0;
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
 
-async function loadDomains() {
-  try {
-    const r = await fetch('/api/domains');
-    if (!r.ok) throw new Error();
-    const d = await r.json();
-    defaultDomain = d.default || location.hostname || 'localhost';
-    allDomains = d.domains && d.domains.length ? d.domains : [defaultDomain];
-
-    const curHost = location.host;
-    if (curHost && !allDomains.includes(curHost) && curHost !== '127.0.0.1' && curHost !== 'localhost' && !curHost.startsWith('127.')) {
-      allDomains.push(curHost);
-    }
-
-    updateDomainSelects();
-    renderDomainList();
-    if ($('#s-domain-count')) $('#s-domain-count').textContent = allDomains.length;
-    if ($('#domains-modal-count')) $('#domains-modal-count').textContent = allDomains.length;
-  } catch (e) {
-    if (!allDomains.length) {
-      allDomains = [location.hostname || 'localhost'];
-      defaultDomain = allDomains[0];
-      updateDomainSelects();
-    }
-  }
-}
-
-function updateDomainSelects() {
-  const newDomainSel = $('#new-domain');
-  const editDomainSel = $('#edit-domain');
-  const subDomainSel = $('#sub-domain-select');
-
-  const domainOptions = allDomains.map(d => {
-    const isDef = d === defaultDomain;
-    const label = d + (isDef ? (lang === 'fa' ? ' (پیش‌فرض)' : ' (Default)') : '');
-    return `<option value="${d}">${label}</option>`;
-  }).join('');
-
-  if (newDomainSel) {
-    const curVal = newDomainSel.value;
-    newDomainSel.innerHTML = domainOptions;
-    if (curVal && allDomains.includes(curVal)) newDomainSel.value = curVal;
-    else if (defaultDomain) newDomainSel.value = defaultDomain;
-  }
-
-  if (editDomainSel) {
-    const curVal = editDomainSel.value;
-    editDomainSel.innerHTML = domainOptions;
-    if (curVal && allDomains.includes(curVal)) editDomainSel.value = curVal;
-    else if (defaultDomain) editDomainSel.value = defaultDomain;
-  }
-
-  if (subDomainSel) {
-    const curVal = subDomainSel.value;
-    const assignedOpt = `<option value="assigned">${lang === 'fa' ? 'دامنه‌های متصل به هر کانفیگ' : 'Config Assigned Domains (Per-Config)'}</option>`;
-    subDomainSel.innerHTML = assignedOpt + domainOptions;
-    if (curVal && (curVal === 'assigned' || allDomains.includes(curVal))) {
-      subDomainSel.value = curVal;
-    } else {
-      subDomainSel.value = defaultDomain || 'assigned';
-    }
-    updateSubUrl();
-  }
-}
-
-function updateSubUrl() {
-  const subSel = $('#sub-domain-select');
-  const selVal = subSel ? subSel.value : 'assigned';
-  let subUrl = '';
-  if (!selVal || selVal === 'assigned') {
-    subUrl = location.origin + '/sub';
-  } else {
-    const proto = location.protocol || 'https:';
-    subUrl = `${proto}//${selVal}/sub?domain=${encodeURIComponent(selVal)}`;
-  }
-  if ($('#sub-url-box')) $('#sub-url-box').textContent = subUrl;
-  return subUrl;
-}
-
-function renderDomainList() {
-  const container = $('#domain-list-container');
-  if (!container) return;
-  container.innerHTML = '';
-
-  if (!allDomains.length) {
-    container.innerHTML = `<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">${lang === 'fa' ? 'هیچ دامنه‌ای یافت نشد' : 'No domains configured'}</div>`;
-    return;
-  }
-
-  allDomains.forEach(d => {
-    const isDef = d === defaultDomain;
-    const item = document.createElement('div');
-    item.className = 'domain-item';
-
-    let badgeClass = 'badge-custom';
-    let badgeText = lang === 'fa' ? 'اختصاصی' : 'CUSTOM';
-    if (isDef) {
-      badgeClass = 'badge-default';
-      badgeText = lang === 'fa' ? 'پیش‌فرض' : 'DEFAULT';
-    } else if (d.includes('railway') || d.includes('onrender')) {
-      badgeClass = 'badge-env';
-      badgeText = 'HOST';
-    }
-
-    item.innerHTML = `
-      <div class="domain-item-info">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--neon-blue);flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        <span class="domain-item-name" title="${d}">${d}</span>
-        <span class="domain-item-badge ${badgeClass}">${badgeText}</span>
-      </div>
-      <div class="domain-item-actions">
-        ${!isDef ? `<button class="btn-domain-action btn-set-default" data-domain="${d}" title="Set as default">${lang === 'fa' ? 'تنظیم پیش‌فرض' : 'Make Default'}</button>` : ''}
-        ${!isDef ? `<button class="btn-domain-action btn-domain-delete" data-domain="${d}" title="Delete">&#x2715;</button>` : ''}
-      </div>
-    `;
-
-    const setDefaultBtn = item.querySelector('.btn-set-default');
-    if (setDefaultBtn) {
-      setDefaultBtn.onclick = () => setDefaultDomain(d);
-    }
-    const delBtn = item.querySelector('.btn-domain-delete');
-    if (delBtn) {
-      delBtn.onclick = () => deleteDomain(d);
-    }
-
-    container.appendChild(item);
-  });
-}
-
-async function addCustomDomain() {
-  const input = $('#new-custom-domain-input');
-  if (!input) return;
-  const raw = input.value.trim();
-  if (!raw) {
-    toast(lang === 'fa' ? 'لطفاً نام دامنه را وارد کنید' : 'Please enter domain name', true);
-    return;
-  }
-  try {
-    const r = await fetch('/api/domains', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain: raw })
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Error adding domain');
-    }
-    input.value = '';
-    toast(lang === 'fa' ? 'دامنه با موفقیت اضافه شد' : 'Domain added successfully');
-    await loadDomains();
-    if ($('#add-modal')?.open && $('#new-domain')) {
-      $('#new-domain').value = raw;
-    }
-    if ($('#edit-modal')?.open && $('#edit-domain')) {
-      $('#edit-domain').value = raw;
-    }
-    await loadStats();
-  } catch (e) {
-    toast(e.message || (lang === 'fa' ? 'خطا در افزودن دامنه' : 'Error adding domain'), true);
-  }
-}
-
-async function deleteDomain(domain) {
-  if (!confirm(lang === 'fa' ? `آیا از حذف دامنه ${domain} مطمئن هستید؟` : `Are you sure you want to delete domain ${domain}?`)) return;
-  try {
-    const r = await fetch(`/api/domains/${encodeURIComponent(domain)}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error();
-    toast(lang === 'fa' ? 'دامنه حذف شد' : 'Domain deleted');
-    await loadDomains();
-    await loadStats();
-  } catch (e) {
-    toast(lang === 'fa' ? 'خطا در حذف دامنه' : 'Error deleting domain', true);
-  }
-}
-
-async function setDefaultDomain(domain) {
-  try {
-    const r = await fetch('/api/domains/default', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ domain })
-    });
-    if (!r.ok) throw new Error();
-    toast(lang === 'fa' ? `دامنه پیش‌فرض به ${domain} تغییر کرد` : `Default domain set to ${domain}`);
-    await loadDomains();
-    await loadLinks();
-    await loadStats();
-  } catch (e) {
-    toast(lang === 'fa' ? 'خطا در تعیین دامنه پیش‌فرض' : 'Error setting default domain', true);
-  }
-}
-
 function setLang(l) {
   lang = l;
   document.getElementById('lang-en').classList.toggle('active', l === 'en');
@@ -217,8 +24,6 @@ function setLang(l) {
     if (v) el.textContent = v;
   });
   localStorage.setItem('ren_lang', l);
-  updateDomainSelects();
-  renderDomainList();
 }
 
 function applyTheme(t) {
@@ -307,18 +112,6 @@ async function loadStats() {
     $('#s-links').textContent = statsData.links_count;
     $('#s-uptime').textContent = statsData.uptime;
     $('#s-domain').textContent = statsData.domain;
-    if (statsData.domains && Array.isArray(statsData.domains)) {
-      let changed = false;
-      statsData.domains.forEach(d => {
-        if (!allDomains.includes(d)) {
-          allDomains.push(d);
-          changed = true;
-        }
-      });
-      if (changed) updateDomainSelects();
-      if ($('#s-domain-count')) $('#s-domain-count').textContent = allDomains.length;
-      if ($('#domains-modal-count')) $('#domains-modal-count').textContent = allDomains.length;
-    }
     $('#links-badge').textContent = statsData.links_count;
     $('#last-update').textContent = (lang === 'fa' ? 'بروزرسانی: ' : 'Updated: ') + new Date().toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-US');
 
@@ -409,13 +202,6 @@ function renderLinks(links) {
     const row = document.importNode(rowTpl, true);
     row.querySelector('.col-id').textContent = i;
     row.querySelector('.col-name').textContent = l.label;
-    const dPill = row.querySelector('.col-domain-pill');
-    if (dPill) {
-      const linkDomain = l.domain || defaultDomain || location.host;
-      dPill.textContent = linkDomain;
-      dPill.title = 'Domain: ' + linkDomain;
-      if (linkDomain === defaultDomain) dPill.classList.add('tag-domain-default');
-    }
     row.querySelector('.col-used').textContent = uF;
     row.querySelector('.col-limit').textContent = lF;
     row.querySelector('.col-fill').style.width = pct + '%';
@@ -447,13 +233,6 @@ function renderLinks(links) {
     const card = document.importNode(cardTpl, true);
     card.querySelector('.col-id').textContent = '#' + i;
     card.querySelector('.col-name').textContent = l.label;
-    const cDPill = card.querySelector('.col-domain-pill');
-    if (cDPill) {
-      const linkDomain = l.domain || defaultDomain || location.host;
-      cDPill.textContent = linkDomain;
-      cDPill.title = 'Domain: ' + linkDomain;
-      if (linkDomain === defaultDomain) cDPill.classList.add('tag-domain-default');
-    }
     card.querySelector('.col-used').textContent = uF;
     card.querySelector('.col-limit').textContent = lF;
     card.querySelector('.col-fill').style.width = pct + '%';
@@ -487,14 +266,12 @@ function showDetail(uid) {
   const pct = lim > 0 ? Math.min(100, (u / lim) * 100) : 0;
   const col = pct > 90 ? 'var(--red)' : pct > 70 ? 'var(--yellow)' : 'var(--neon-blue)';
   const created = l.created_at ? new Date(l.created_at).toLocaleString(lang === 'fa' ? 'fa-IR' : 'en-US') : '--';
-  const linkDomain = l.domain || defaultDomain || location.host;
 
   $('#detail-title').textContent = l.label;
   const stat = $('#det-status');
   stat.textContent = l.active ? 'Active' : 'Disabled';
   stat.className = 'tag ' + (l.active ? 'tag-active' : 'tag-disabled');
   $('#det-uuid').textContent = l.uuid;
-  if ($('#det-domain')) $('#det-domain').textContent = linkDomain;
   $('#det-used').textContent = uF;
   $('#det-limit').textContent = lF;
   $('#det-pct').textContent = pct.toFixed(1) + '%';
@@ -535,7 +312,7 @@ async function quickCreate(limit, unit) {
     const r = await fetch('/api/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: name, limit_value: limit, limit_unit: unit, domain: defaultDomain })
+      body: JSON.stringify({ label: name, limit_value: limit, limit_unit: unit })
     });
     if (!r.ok) throw new Error();
     toast('Created: ' + name);
@@ -550,7 +327,6 @@ async function createLink() {
   const label = $('#new-label').value.trim() || 'New Link';
   const val = parseFloat($('#new-limit').value) || 0;
   const unit = $('#new-unit').value || 'GB';
-  const domain = $('#new-domain')?.value || defaultDomain;
   if (!/^[a-zA-Z0-9\-_. ]+$/.test(label)) {
     toast('Only English letters and numbers allowed in remark', true);
     return;
@@ -559,7 +335,7 @@ async function createLink() {
     const r = await fetch('/api/links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, limit_value: val, limit_unit: unit, domain })
+      body: JSON.stringify({ label, limit_value: val, limit_unit: unit })
     });
     if (!r.ok) throw new Error();
     toast('Created successfully');
@@ -579,14 +355,6 @@ function openEditModal(l) {
   const gb = (l.limit_bytes || 0) / (1024 * 1024 * 1024);
   $('#edit-limit').value = gb > 0 ? (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) : 0;
   $('#edit-reset-usage').checked = false;
-  if ($('#edit-domain')) {
-    const linkDomain = l.domain || defaultDomain;
-    if (linkDomain && !allDomains.includes(linkDomain)) {
-      allDomains.push(linkDomain);
-      updateDomainSelects();
-    }
-    $('#edit-domain').value = linkDomain;
-  }
   $('#edit-modal').showModal();
 }
 
@@ -595,7 +363,6 @@ async function saveEdit() {
   const label = $('#edit-label').value.trim() || 'Link';
   const limitVal = parseFloat($('#edit-limit').value) || 0;
   const resetUsage = $('#edit-reset-usage').checked;
-  const domain = $('#edit-domain')?.value || defaultDomain;
 
   try {
     const r = await fetch(`/api/links/${uid}`, {
@@ -605,8 +372,7 @@ async function saveEdit() {
         label,
         limit_value: limitVal,
         limit_unit: 'GB',
-        reset_usage: resetUsage,
-        domain
+        reset_usage: resetUsage
       })
     });
     if (!r.ok) throw new Error();
@@ -685,33 +451,9 @@ function downloadQR() {
 }
 
 function openSubModal() {
-  updateDomainSelects();
-  updateSubUrl();
+  const subUrl = location.origin + '/sub';
+  $('#sub-url-box').textContent = subUrl;
   $('#sub-modal').showModal();
-}
-
-async function downloadSubTxt() {
-  const subSel = $('#sub-domain-select');
-  const selVal = subSel ? subSel.value : 'assigned';
-  let url = '/sub';
-  if (selVal && selVal !== 'assigned') {
-    url = `/sub?domain=${encodeURIComponent(selVal)}`;
-  }
-  try {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error();
-    const txtBase64 = await r.text();
-    const rawTxt = atob(txtBase64.trim());
-    const blob = new Blob([rawTxt], { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `MeyREN-Sub-${selVal || 'all'}.txt`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast(lang === 'fa' ? 'فایل اشتراک دانلود شد' : 'Subscription downloaded');
-  } catch (e) {
-    toast(lang === 'fa' ? 'خطا در دانلود اشتراک' : 'Error downloading subscription', true);
-  }
 }
 
 function exportTxt() {
@@ -963,26 +705,11 @@ $('#detail-modal-close')?.addEventListener('click', () => $('#detail-modal').clo
 $('#qr-modal-close')?.addEventListener('click', () => $('#qr-modal').close());
 $('#restore-modal-close')?.addEventListener('click', () => $('#restore-modal').close());
 
-function openDomainsModal() {
-  renderDomainList();
-  $('#domains-modal').showModal();
-}
-
-$('#btn-domains-modal')?.addEventListener('click', openDomainsModal);
-$('#stat-domain-card')?.addEventListener('click', openDomainsModal);
-$('#btn-add-modal-manage-domains')?.addEventListener('click', openDomainsModal);
-$('#btn-edit-modal-manage-domains')?.addEventListener('click', openDomainsModal);
-$('#btn-sub-modal-manage-domains')?.addEventListener('click', openDomainsModal);
-$('#domains-modal-close')?.addEventListener('click', () => $('#domains-modal').close());
-$('#btn-add-custom-domain')?.addEventListener('click', addCustomDomain);
-$('#new-custom-domain-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addCustomDomain(); });
-$('#sub-domain-select')?.addEventListener('change', updateSubUrl);
-
 $('#btn-download-qr')?.addEventListener('click', downloadQR);
 $('#btn-close-qr')?.addEventListener('click', () => $('#qr-modal').close());
 $('#btn-copy-sub')?.addEventListener('click', function() { copyLinkText($('#sub-url-box').textContent, this); });
 $('#btn-qr-sub')?.addEventListener('click', () => showQRText($('#sub-url-box').textContent, 'Subscription QR'));
-$('#btn-open-sub-txt')?.addEventListener('click', downloadSubTxt);
+$('#btn-open-sub-txt')?.addEventListener('click', exportTxt);
 
 // Initialize
 applyTheme(theme);
@@ -996,7 +723,6 @@ if (isCompact) {
 initHourlyChart();
 initConsumersChart();
 
-loadDomains();
 loadStats();
 loadLinks();
 setInterval(loadStats, 10000);

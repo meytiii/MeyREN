@@ -5,7 +5,6 @@ import time
 import main
 import auth
 import db
-import utils
 
 async def run_asgi(scope_dict, body=b""):
     messages = []
@@ -133,106 +132,6 @@ async def test_all():
     print("    [OK] POST /api/links/{uid}/topup -> 200 OK (+2 GB applied)")
 
     db.delete_link(test_sub_uid)
-
-    # 5. Multi-Domain Verification Suite
-    print("\n[5] Testing Multi-Domain Functionality...")
-    # Clean domain test
-    assert utils.clean_domain("https://meyren-production-14d9.up.railway.app/") == "meyren-production-14d9.up.railway.app"
-    assert utils.clean_domain("http://custom.domain.net:443/test?q=1") == "custom.domain.net:443"
-    print("    [OK] utils.clean_domain correctly handles URLs, protocols, and trailing slashes")
-
-    # Add custom domain via API
-    add_d_payload = json.dumps({"domain": "node2.up.railway.app"}).encode()
-    status, _, body = await run_asgi({
-        "method": "POST", "path": "/api/domains", "raw_path": b"/api/domains",
-        "headers": [(b"content-type", b"application/json"), (b"cookie", cookie_val.encode())]
-    }, body=add_d_payload)
-    assert status == 200
-    d_data = json.loads(body)
-    assert "node2.up.railway.app" in d_data["domains"]
-    print("    [OK] POST /api/domains -> 200 OK (Domain added)")
-
-    # List domains
-    status, _, body = await run_asgi({
-        "method": "GET", "path": "/api/domains", "raw_path": b"/api/domains",
-        "headers": [(b"cookie", cookie_val.encode())]
-    })
-    assert status == 200
-    assert "node2.up.railway.app" in json.loads(body)["domains"]
-    print("    [OK] GET /api/domains -> 200 OK (List verified)")
-
-    # Create link with custom domain
-    create_link_payload = json.dumps({
-        "label": "MultiDomainTest",
-        "limit_value": 1.0,
-        "limit_unit": "GB",
-        "domain": "node2.up.railway.app"
-    }).encode()
-    status, _, body = await run_asgi({
-        "method": "POST", "path": "/api/links", "raw_path": b"/api/links",
-        "headers": [(b"content-type", b"application/json"), (b"cookie", cookie_val.encode())]
-    }, body=create_link_payload)
-    assert status == 200
-    new_link = json.loads(body)
-    test_md_uid = new_link["uuid"]
-    assert new_link["domain"] == "node2.up.railway.app"
-    assert "@node2.up.railway.app:443" in new_link["vless_link"]
-    print("    [OK] POST /api/links with custom domain -> 200 OK (VLESS link matches selected domain)")
-
-    # Edit link domain to a different domain
-    edit_payload = json.dumps({
-        "label": "MultiDomainTest-Edited",
-        "domain": "meyren-production-14d9.up.railway.app"
-    }).encode()
-    status, _, _ = await run_asgi({
-        "method": "PATCH", "path": f"/api/links/{test_md_uid}",
-        "raw_path": f"/api/links/{test_md_uid}".encode(),
-        "headers": [(b"content-type", b"application/json"), (b"cookie", cookie_val.encode())]
-    }, body=edit_payload)
-    assert status == 200
-    updated_link = db.get_link(test_md_uid)
-    assert updated_link["domain"] == "meyren-production-14d9.up.railway.app"
-    print("    [OK] PATCH /api/links/{uid} domain edit -> 200 OK (Domain updated in DB and cache)")
-
-    # Verify GET /api/links returns updated link with updated vless_link
-    status, _, body = await run_asgi({
-        "method": "GET", "path": "/api/links", "raw_path": b"/api/links",
-        "headers": [(b"cookie", cookie_val.encode())]
-    })
-    assert status == 200
-    links_list = json.loads(body)["links"]
-    matched = next((l for l in links_list if l["uuid"] == test_md_uid), None)
-    assert matched is not None
-    assert matched["domain"] == "meyren-production-14d9.up.railway.app"
-    assert "@meyren-production-14d9.up.railway.app:443" in matched["vless_link"]
-    print("    [OK] GET /api/links returns updated domain and generated VLESS link")
-
-    # Verify GET /sub with per-config assigned domain
-    status, _, body = await run_asgi({"method": "GET", "path": "/sub", "raw_path": b"/sub"})
-    assert status == 200
-    decoded_sub = base64.b64decode(body).decode("utf-8")
-    assert "meyren-production-14d9.up.railway.app" in decoded_sub
-    print("    [OK] GET /sub per-config domain routing verified in subscription stream")
-
-    # Verify GET /sub?domain=specific-override.com
-    status, _, body = await run_asgi({
-        "method": "GET", "path": "/sub", "raw_path": b"/sub",
-        "query_string": b"domain=override-node.com"
-    })
-    assert status == 200
-    decoded_override = base64.b64decode(body).decode("utf-8")
-    assert "@override-node.com:443" in decoded_override
-    print("    [OK] GET /sub?domain=override-node.com overrides configs in stream")
-
-    # Clean up test link and custom domain
-    db.delete_link(test_md_uid)
-    status, _, _ = await run_asgi({
-        "method": "DELETE", "path": "/api/domains/node2.up.railway.app",
-        "raw_path": b"/api/domains/node2.up.railway.app",
-        "headers": [(b"cookie", cookie_val.encode())]
-    })
-    assert status == 200
-    print("    [OK] DELETE /api/domains/{domain} -> 200 OK (Domain removed)")
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED! SERVER IS READY TO RUN.")
