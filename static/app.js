@@ -14,7 +14,7 @@ const I18N = {
   nav_logs: 'لاگ فعالیت',
   nav_settings: 'تنظیمات',
   nav_support: 'پشتیبانی',
-  nav_donate: 'حمایت مالی',
+  nav_donate: 'حمایت از پروژه',
   nav_news: 'اخبار',
   nav_admins: 'ادمین‌ها',
   nav_telegram: 'ربات تلگرام',

@@ -932,37 +932,274 @@ input:checked + .slider:before {
   margin-top: 3px;
 }
 
-.donate-box {
-  max-width: 600px;
+/* ============================================================
+   PROJECT SUPPORT & GITHUB STAR SHOWCASE
+   ============================================================ */
+
+.support-wrap {
+  max-width: 680px;
   margin: 0 auto;
+  width: 100%;
+}
+
+.support-card {
   padding: 28px;
-  text-align: center;
   border: 1px solid var(--card-b);
   border-radius: var(--radius);
   background: var(--card);
   box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.crypto-row {
+.support-notice {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 14px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.support-notice::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120px;
+  height: 100%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.notice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  color: #c084fc;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+
+.notice-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a855f7;
+  box-shadow: 0 0 8px #a855f7;
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+.notice-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--t1);
+  margin-bottom: 8px;
+}
+
+.notice-desc {
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: var(--t2);
+  margin: 0;
+}
+
+.github-star-hero {
+  display: flex;
+  gap: 18px;
+  padding: 22px;
+  background: var(--bg2);
+  border: 1px solid var(--card-b);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  transition: 0.25s ease;
+}
+
+.github-star-hero:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.18);
+}
+
+.gh-hero-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--hover);
+  border: 1px solid var(--card-b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--t1);
+}
+
+.gh-hero-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.gh-hero-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 16px;
-  margin: 10px 0;
-  background: var(--bg3);
-  border: 1px solid var(--card-b);
-  border-radius: 12px;
+  flex-wrap: wrap;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--t1);
+  margin-bottom: 8px;
 }
 
-.crypto-addr {
+.gh-star-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #facc15;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.gh-hero-desc {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--t2);
+  margin-bottom: 16px;
+}
+
+.gh-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-star-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--accent-gradient);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  min-height: 44px;
+  box-shadow: 0 4px 18px rgba(37, 99, 235, 0.35);
+  transition: 0.2s ease;
+}
+
+.btn-star-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+  color: #fff;
+}
+
+.gh-badge-pill {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
   font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
+  opacity: 0.9;
+}
+
+.btn-secondary-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: var(--hover);
+  border: 1px solid var(--card-b);
+  border-radius: 12px;
+  color: var(--t1);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  transition: 0.2s ease;
+}
+
+.btn-secondary-star:hover {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: var(--accent);
+  color: var(--t1);
+}
+
+.support-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.support-sub-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--card-b);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: 0.2s ease;
+}
+
+.support-sub-tile:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.15);
+}
+
+.sub-tile-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--hover);
+  border: 1px solid var(--card-b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   color: var(--accent-light);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  direction: ltr;
+}
+
+.sub-tile-icon.tg-color {
+  color: #38bdf8;
+}
+
+.sub-tile-info {
+  min-width: 0;
+}
+
+.sub-tile-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--t1);
+}
+
+.sub-tile-desc {
+  font-size: 11px;
+  color: var(--t3);
+  margin-top: 3px;
+  line-height: 1.5;
 }
 
 /* ============================================================
@@ -1600,6 +1837,37 @@ html, body {
     width: 100%;
     min-height: 44px;
   }
+
+  /* Support Showcase Mobile Responsive */
+  .support-card {
+    padding: 18px 14px;
+  }
+
+  .github-star-hero {
+    flex-direction: column;
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .gh-hero-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .gh-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-star-action,
+  .btn-secondary-star {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .support-sub-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ------------------------------------------------------------
@@ -1623,17 +1891,7 @@ html, body {
     height: 36px;
   }
 
-  .crypto-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .crypto-row button {
-    width: 100%;
-  }
-
-  .donate-box {
-    padding: 18px 12px;
+  .support-card {
+    padding: 14px 10px;
   }
 }
