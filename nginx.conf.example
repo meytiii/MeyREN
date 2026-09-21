@@ -1,0 +1,30 @@
+# MeyREN Nginx Reverse Proxy Configuration Template
+# Replace your-domain.com with your actual domain name.
+# Place this file in /etc/nginx/sites-available/meyren and link to /etc/nginx/sites-enabled/
+
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # Redirect all HTTP traffic to HTTPS (uncomment after obtaining SSL cert)
+    # return 301 https://$host$request_uri;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+
+        # WebSocket support (Required for VLESS WS & live dashboard stats)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Disable buffering and extend timeouts for long-lived tunnels
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}

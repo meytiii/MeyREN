@@ -1,0 +1,17 @@
+services:
+  meyren:
+    build: .
+    container_name: meyren-gateway
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - ADMIN_PASSWORD=admin
+      - SECRET_KEY=change_this_to_a_secure_random_string
+      - SERVER_DOMAIN=206.1.97.194
+    volumes:
+      - meyren-data:/app/meyren.db
+
+volumes:
+  meyren-data:

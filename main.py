@@ -16,6 +16,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import logging
 import psutil
+from dotenv import load_dotenv
+
+load_dotenv()
 
 import db
 import utils

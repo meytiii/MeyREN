@@ -24,7 +24,10 @@ CF_CLEAN_IPS = [
 def get_domain() -> str:
     return os.environ.get(
         "RENDER_EXTERNAL_URL",
-        os.environ.get("RAILWAY_PUBLIC_DOMAIN", os.environ.get("SERVER_DOMAIN", "localhost"))
+        os.environ.get(
+            "RAILWAY_PUBLIC_DOMAIN",
+            os.environ.get("SERVER_DOMAIN", os.environ.get("DEFAULT_DOMAIN", "localhost"))
+        )
     ).replace("https://", "").replace("http://", "").split("/")[0]
 
 
